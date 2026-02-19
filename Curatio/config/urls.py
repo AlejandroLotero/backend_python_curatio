@@ -28,7 +28,6 @@ from django.contrib.auth import views as auth_views
 from accounts import views as account_views
 from django.conf import settings
 from django.conf.urls.static import static
-from . import views
 
 
 # urlpatterns = [
@@ -43,7 +42,6 @@ from . import views
 urlpatterns = [
     path('admin-panel/', admin.site.urls),
     path('login/', auth_views.LoginView.as_view(template_name='accounts/login.html'), name='login'),
-    path('crear/', views.crear_usuario, name='crear_usuario'),
     
     # Esta es la ruta que te falta para el error 404:
     path('', account_views.dashboard, name='dashboard'),
