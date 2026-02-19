@@ -51,7 +51,7 @@ urlpatterns = [
     # Rutas de recuperación
     path('password-reset/', auth_views.PasswordResetView.as_view(), name='password_reset'),
     path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
-    path('accounts/', include('accounts.urls')),
+    path('accounts/crear/', account_views.crear_usuario, name='crear_usuario'),
 
 
 ]
