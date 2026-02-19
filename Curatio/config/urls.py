@@ -25,7 +25,10 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
-from accounts import views as account_views 
+from accounts import views as account_views
+from django.conf import settings
+from django.conf.urls.static import static
+
 
 # urlpatterns = [
 #     path('admin-panel/', admin.site.urls),
@@ -46,4 +49,10 @@ urlpatterns = [
     # Rutas de recuperación
     path('password-reset/', auth_views.PasswordResetView.as_view(), name='password_reset'),
     path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
+    path('accounts/crear/', account_views.crear_usuario, name='crear_usuario'),
+
+
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
