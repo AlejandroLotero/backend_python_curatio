@@ -1,0 +1,80 @@
+{% extends "base.html" %} {# si no tienes base.html, cambia a tu layout o quita extends #}
+{% block content %}
+
+<h2>Gestión de usuarios</h2>
+
+<form method="get" style="margin-bottom: 1rem;">
+  <input type="text" name="nombre" placeholder="Nombre" value="{{ nombre }}"/>
+
+  <select name="rol">
+    <option value="">-- Rol --</option>
+    {% for value,label in roles %}
+      <option value="{{ value }}" {% if rol == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+
+  <select name="estado">
+    <option value="">-- Estado --</option>
+    <option value="1" {% if estado == "1" or estado == "true" or estado == "True" %}selected{% endif %}>Activo</option>
+    <option value="0" {% if estado == "0" or estado == "false" or estado == "False" %}selected{% endif %}>Inactivo</option>
+  </select>
+
+  <input type="text" name="documento" placeholder="Documento (tipo o número)" value="{{ documento }}"/>
+
+  <button type="submit">Filtrar</button>
+  <a href="{% url 'lista_usuarios' %}">Limpiar</a>
+</form>
+
+<table border="1" cellpadding="8" cellspacing="0" width="100%">
+  <thead>
+    <tr>
+      <th>Nombre completo</th>
+      <th>Tipo de usuario</th>
+      <th>Tipo de Documento</th>
+      <th>Número de Documento</th>
+      <th>Estado</th>
+      <th>Correo personal</th>
+      <th>Teléfono</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in page_obj %}
+      <tr>
+        <td>{{ u.nombre }}</td>
+        <td>{{ u.rol }}</td>
+        <td>{{ u.tipo_documento }}</td>
+        <td>{{ u.numero_documento }}</td>
+        <td>{% if u.estado %}Activo{% else %}Inactivo{% endif %}</td>
+        <td>{{ u.email }}</td>
+        <td>{{ u.telefono }}</td>
+        <td>
+          <a href="{% url 'ver_usuario_admin' u.id %}">Ver</a>
+          {# placeholders para lo que pidas luego #}
+          {# <a href="#">Editar</a> #}
+          {# <a href="#">Deshabilitar</a> #}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="8">No hay usuarios para mostrar.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div style="margin-top: 1rem;">
+  {% if page_obj.has_previous %}
+    <a href="?page=1&nombre={{ nombre }}&rol={{ rol }}&estado={{ estado }}&documento={{ documento }}">« Primero</a>
+    <a href="?page={{ page_obj.previous_page_number }}&nombre={{ nombre }}&rol={{ rol }}&estado={{ estado }}&documento={{ documento }}">‹ Anterior</a>
+  {% endif %}
+
+  <span style="margin: 0 0.5rem;">
+    Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+  </span>
+
+  {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}&nombre={{ nombre }}&rol={{ rol }}&estado={{ estado }}&documento={{ documento }}">Siguiente ›</a>
+    <a href="?page={{ page_obj.paginator.num_pages }}&nombre={{ nombre }}&rol={{ rol }}&estado={{ estado }}&documento={{ documento }}">Último »</a>
+  {% endif %}
+</div>
+
+{% endblock %}
