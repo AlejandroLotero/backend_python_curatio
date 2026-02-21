@@ -1,0 +1,19 @@
+<h2>Perfil de Usuario</h2>
+
+<p><b>Nombre:</b> {{ usuario.nombre }}</p>
+<p><b>Email:</b> {{ usuario.email }}</p>
+<p><b>Documento:</b> {{ usuario.tipo_documento }} - {{ usuario.numero_documento }}</p>
+<p><b>Rol:</b> {{ usuario.rol }}</p>
+<p><b>Teléfono:</b> {{ usuario.telefono }}</p>
+<p><b>Teléfono secundario:</b> {{ usuario.telefono_secundario }}</p>
+<p><b>Dirección:</b> {{ usuario.direccion }}</p>
+
+{% if request.user.rol == "Administrador" %}
+<p><b>Estado:</b> {{ usuario.estado }}</p>
+<p><b>Fecha inicio:</b> {{ usuario.fecha_inicio }}</p>
+<p><b>Fecha fin:</b> {{ usuario.fecha_fin }}</p>
+{% endif %}
+
+{% if request.user.rol == "Administrador" or request.user.id == usuario.id %}
+<a href="#">Editar cuenta</a>
+{% endif %}
