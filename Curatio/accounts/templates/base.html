@@ -1,0 +1,247 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Curatio{% endblock %}</title>
+
+  <style>
+    :root{
+      --bg:#0b1220; --card:#0f1a2e; --muted:#93a4c7; --text:#e8eefc;
+      --primary:#4f7cff; --border:rgba(255,255,255,.10);
+      --danger:#ff5d5d; --ok:#4cd37b; --warn:#ffcc66;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: linear-gradient(180deg, #070b14, #0b1220);
+      color:var(--text);
+    }
+    a{color:inherit; text-decoration:none}
+    .shell{min-height:100vh; display:grid; grid-template-columns: 260px 1fr;}
+    .sidebar{
+      border-right:1px solid var(--border);
+      padding:18px 14px;
+      background: rgba(15,26,46,.65);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top:0;
+      height:100vh;
+    }
+    .brand{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 10px 14px;
+      border-bottom:1px solid var(--border);
+      margin-bottom:14px;
+    }
+    .logo{
+      width:34px; height:34px; border-radius:10px;
+      background: radial-gradient(circle at 30% 30%, #7aa6ff, #2e4fff 60%, #13235a);
+      box-shadow: 0 8px 28px rgba(79,124,255,.28);
+    }
+    .brand h1{font-size:16px; margin:0; line-height:1.1}
+    .brand small{display:block; color:var(--muted); font-size:12px; margin-top:2px}
+
+    .nav-section{margin:14px 0 8px; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; padding:0 10px;}
+    .nav a{
+      display:flex; align-items:center; gap:10px;
+      padding:10px 10px;
+      border-radius:12px;
+      color:var(--text);
+      border:1px solid transparent;
+      transition: .15s ease;
+      margin:6px 6px;
+    }
+    .nav a:hover{
+      background: rgba(79,124,255,.10);
+      border-color: rgba(79,124,255,.22);
+    }
+    .pill{
+      margin-left:auto;
+      font-size:11px;
+      padding:2px 8px;
+      border-radius:999px;
+      background: rgba(255,255,255,.08);
+      color: var(--muted);
+      border:1px solid var(--border);
+    }
+
+    .main{
+      padding:22px;
+      max-width: 1200px;
+      width:100%;
+      margin:0 auto;
+    }
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      padding:14px 16px;
+      border:1px solid var(--border);
+      border-radius:16px;
+      background: rgba(15,26,46,.55);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 40px rgba(0,0,0,.25);
+    }
+    .who{
+      display:flex; flex-direction:column; gap:2px;
+      min-width: 220px;
+    }
+    .who b{font-size:14px}
+    .who span{font-size:12px; color:var(--muted)}
+    .actions{
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    }
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:9px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color:var(--text);
+      transition:.15s ease;
+      font-size:13px;
+      cursor:pointer;
+    }
+    .btn:hover{transform: translateY(-1px); border-color: rgba(79,124,255,.35); background: rgba(79,124,255,.10);}
+    .btn.primary{background: rgba(79,124,255,.18); border-color: rgba(79,124,255,.35);}
+    .btn.danger{background: rgba(255,93,93,.10); border-color: rgba(255,93,93,.25);}
+
+    .content{
+      margin-top:16px;
+      padding:16px;
+      border:1px solid var(--border);
+      border-radius:18px;
+      background: rgba(15,26,46,.45);
+      box-shadow: 0 10px 40px rgba(0,0,0,.20);
+    }
+
+    .msg{
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      font-size: 13px;
+    }
+    .msg.success{border-color: rgba(76,211,123,.35); background: rgba(76,211,123,.10);}
+    .msg.error{border-color: rgba(255,93,93,.35); background: rgba(255,93,93,.10);}
+    .msg.warning{border-color: rgba(255,204,102,.35); background: rgba(255,204,102,.10);}
+
+    @media (max-width: 920px){
+      .shell{grid-template-columns: 1fr;}
+      .sidebar{position: relative; height:auto;}
+    }
+  </style>
+
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<div class="shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo"></div>
+      <div>
+        <h1>Curatio</h1>
+        <small>Panel de gestión</small>
+      </div>
+    </div>
+
+    <div class="nav">
+      <div class="nav-section">General</div>
+      <a href="{% url 'dashboard' %}">
+        Dashboard
+      </a>
+
+      {% if user.is_authenticated %}
+        <a href="{% url 'mi_perfil' %}">
+          Mi perfil
+        </a>
+      {% endif %}
+
+      <div class="nav-section">Usuarios</div>
+
+      {% if user.is_authenticated and user.rol == "Administrador" %}
+        <a href="{% url 'lista_usuarios' %}">
+          Gestión de usuarios
+          <span class="pill">ADMIN</span>
+        </a>
+
+        <a href="{% url 'crear_usuario' %}">
+          Crear usuario
+          <span class="pill">ADMIN</span>
+        </a>
+
+        <a href="/admin-panel/" target="_blank" rel="noopener">
+          Django admin
+          <span class="pill">/admin-panel</span>
+        </a>
+      {% else %}
+        <a href="#" onclick="return false;" style="opacity:.6; cursor:not-allowed;">
+          Gestión de usuarios
+          <span class="pill">Solo ADMIN</span>
+        </a>
+      {% endif %}
+
+      <div class="nav-section">Seguridad</div>
+
+      {% if user.is_authenticated %}
+        {# Si luego agregas logout real, esta ruta cambia. Ver nota abajo #}
+        <a href="{% url 'logout' %}" style="color:var(--danger);">Cerrar sesión</a>
+       
+      {% else %}
+        <a href="{% url 'login' %}">
+          Iniciar sesión
+        </a>
+      {% endif %}
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <div class="topbar">
+      <div class="who">
+        {% if user.is_authenticated %}
+          <b>{{ user.nombre }}</b>
+          <span>{{ user.email }} · {{ user.rol }}</span>
+        {% else %}
+          <b>Sesión no iniciada</b>
+          <span>Ingresa para continuar</span>
+        {% endif %}
+      </div>
+
+      <div class="actions">
+        {% if user.is_authenticated and user.rol == "Administrador" %}
+          <a class="btn primary" href="{% url 'lista_usuarios' %}">Usuarios</a>
+          <a class="btn" href="{% url 'crear_usuario' %}">Crear</a>
+        {% endif %}
+        {% if user.is_authenticated %}
+          <a class="btn" href="{% url 'mi_perfil' %}">Perfil</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <section class="content">
+      {% if messages %}
+        {% for message in messages %}
+          <div class="msg {% if message.tags %}{{ message.tags }}{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </section>
+
+  </main>
+</div>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

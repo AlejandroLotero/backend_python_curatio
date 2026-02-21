@@ -1,28 +1,32 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <title>Curatio | Login</title>
-</head>
-<body class="bg-gray-100 flex items-center justify-center h-screen">
-    <div class="bg-white p-8 rounded-lg shadow-md w-96">
-        <h2 class="text-2xl font-bold mb-6 text-center text-blue-800">Curatio Admin</h2>
-        <form method="post">
-            {% csrf_token %}
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2">Correo electrónico</label>
-                {{ form.username }} </div>
-            <div class="mb-6">
-                <label class="block text-gray-700 text-sm font-bold mb-2">Contraseña</label>
-                {{ form.password }}
-            </div>
-            <button class="w-full bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition duration-200">
-                Ingresar
-            </button>
-        </form>
-        <div class="mt-4 text-center">
-            <a href="{% url 'password_reset' %}" class="text-sm text-blue-500 hover:underline">¿Olvidó su contraseña?</a>
-        </div>
+{% extends "base_auth.html" %}
+
+{% block title %}Curatio | Login{% endblock %}
+
+{% block content %}
+  <h2 style="margin:0 0 8px; font-size:18px;">Ingresar</h2>
+  <p style="margin:0 0 10px; color: rgba(147,164,199,1); font-size:13px;">
+    Accede con tu correo y contraseña.
+  </p>
+
+  {% if form.errors %}
+    <div class="errors">
+      Verifica tus credenciales e intenta nuevamente.
     </div>
-</body>
-</html>
+  {% endif %}
+
+  <form method="post" style="margin-top:12px;">
+    {% csrf_token %}
+
+    <label for="id_username">Correo electrónico</label>
+    {{ form.username }}
+
+    <label for="id_password">Contraseña</label>
+    {{ form.password }}
+
+    <button class="btn" type="submit">Ingresar</button>
+  </form>
+
+  <div class="help">
+    <a href="{% url 'password_reset' %}">¿Olvidaste tu contraseña?</a>
+  </div>
+{% endblock %}
