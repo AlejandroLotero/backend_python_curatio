@@ -1,5 +1,6 @@
 from django.shortcuts import render
-
+from django.shortcuts import get_object_or_404
+from .models import User
 # Create your views here.
 from django.contrib.auth.decorators import login_required
 
@@ -46,3 +47,19 @@ def crear_usuario(request):
         form = CrearUsuarioForm()
 
     return render(request, "accounts/crear_usuario.html", {"form": form})
+
+def ver_usuario(request, user_id=None):
+    """
+    RQ: Visualizar cuenta de usuario
+    ADMIN puede ver cualquier usuario
+    Otros usuarios solo su cuenta
+    """
+
+    # ADMIN puede ver otros usuarios
+    if request.user.rol == "Administrador" and user_id:
+        usuario = get_object_or_404(User, id=user_id)
+    else:
+        # Usuario normal solo se ve a sí mismo
+        usuario = request.user
+
+    return render(request, "accounts/ver_usuario.html", {"usuario": usuario})

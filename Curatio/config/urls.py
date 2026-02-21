@@ -30,6 +30,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 
+
 # urlpatterns = [
 #     path('admin-panel/', admin.site.urls),
 #     # Login profesional
@@ -51,6 +52,13 @@ urlpatterns = [
     path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
     path('accounts/crear/', account_views.crear_usuario, name='crear_usuario'),
 
+    #Visualizar usuario
+    # Usuario autenticado ve su perfil
+    path('accounts/perfil/', account_views.ver_usuario, name='mi_perfil'),
+
+    # ADMIN ve cualquier usuario
+    path('accounts/usuario/<int:user_id>/', account_views.ver_usuario, name='ver_usuario_admin'),
+    
 
 ]
 
