@@ -1,17 +1,45 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <title>Curatio | Dashboard</title>
-</head>
-<body class="bg-gray-100">
-    <nav class="bg-blue-800 p-4 text-white flex justify-between">
-        <h1 class="font-bold">CURATIO SISTEMA</h1>
-        <span class="text-sm">Bienvenido, {{ user.email }}</span>
-    </nav>
-    <div class="p-8">
-        <h2 class="text-2xl font-semibold">Panel Principal (RFADMIN01)</h2>
-        <p class="mt-4 text-green-600 bg-green-100 p-4 rounded">¡Autenticación exitosa!</p>
-    </div>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Curatio | Dashboard{% endblock %}
+
+{% block content %}
+  <h2 style="margin:0 0 6px;">Panel Principal (RFADMIN01)</h2>
+  <p style="margin:0 0 14px; color: rgba(147,164,199,1);">
+    Bienvenido, {{ user.email }}
+  </p>
+
+  <div style="border:1px solid rgba(76,211,123,.35); background: rgba(76,211,123,.10); padding:12px 14px; border-radius:14px;">
+    ✅ ¡Autenticación exitosa!
+  </div>
+
+  <div style="margin-top:16px; display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+    {% if user.rol == "Administrador" %}
+      <a href="{% url 'lista_usuarios' %}" style="display:block; border:1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.06); padding:14px; border-radius:16px;">
+        <b>Gestión de usuarios</b>
+        <div style="font-size:12px; color: rgba(147,164,199,1); margin-top:6px;">
+          Ver listado, filtrar, ordenar y administrar usuarios
+        </div>
+      </a>
+
+      <a href="{% url 'crear_usuario' %}" style="display:block; border:1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.06); padding:14px; border-radius:16px;">
+        <b>Crear usuario</b>
+        <div style="font-size:12px; color: rgba(147,164,199,1); margin-top:6px;">
+          Registro rápido con contraseña generada y envío por correo
+        </div>
+      </a>
+
+      <a href="/admin-panel/" target="_blank" rel="noopener" style="display:block; border:1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.06); padding:14px; border-radius:16px;">
+        <b>Django Admin</b>
+        <div style="font-size:12px; color: rgba(147,164,199,1); margin-top:6px;">
+          Administración avanzada del sistema
+        </div>
+      </a>
+    {% endif %}
+
+    <a href="{% url 'mi_perfil' %}" style="display:block; border:1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.06); padding:14px; border-radius:16px;">
+      <b>Mi perfil</b>
+      <div style="font-size:12px; color: rgba(147,164,199,1); margin-top:6px;">
+        Ver información de tu cuenta
+      </div>
+    </a>
+  </div>
+{% endblock %}
