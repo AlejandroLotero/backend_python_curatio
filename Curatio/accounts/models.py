@@ -125,7 +125,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     estado = models.BooleanField(default=True)  # Activo por defecto
 
-    # ========= CAMPOS OBLIGATORIOS DJANGO =========
+    # ========= CAMPOS OBLIGATORIOS DJANGO ========= 
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
@@ -198,5 +198,26 @@ class User(AbstractBaseUser, PermissionsMixin):
                 raise ValidationError("Formato de imagen no permitido.")
 
 
+
+#BITACORA: registro histórico de acciones importantes que se hacen en el sistema.
+class BitacoraUsuario(models.Model):
+    admin = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="acciones_admin"
+    )
+
+    usuario = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="acciones_usuario"
+    )
+
+    accion = models.CharField(max_length=50)
+    motivo = models.TextField(blank=True, null=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.admin.email} -> {self.usuario.email} ({self.accion})"
 
 

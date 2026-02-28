@@ -1,6 +1,8 @@
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from .models import User
+from django.contrib import messages
+from .models import BitacoraUsuario
 # Create your views here.
 from django.contrib.auth.decorators import login_required
 
@@ -118,3 +120,36 @@ def lista_usuarios(request):
         "roles": User.ROLES,
     }
     return render(request, "accounts/lista_usuarios.html", context)
+
+#METODO CAMBIAR ESTADO DE USUARIO
+@login_required
+def cambiar_estado_usuario(request, user_id):
+
+    # Solo ADMIN
+    if request.user.rol != "Administrador":
+        return redirect("login")
+
+    usuario = get_object_or_404(User, id=user_id)
+
+    # No permitir desactivar administradores
+    if usuario.rol == "Administrador":
+        messages.error(request, "No se puede desactivar un administrador")
+        return redirect("lista_usuarios")
+
+    motivo = request.POST.get("motivo", "")
+
+    # Cambiar estado
+    usuario.estado = not usuario.estado
+    usuario.save()
+
+    # Guardar bitácora
+    BitacoraUsuario.objects.create(
+        admin=request.user,
+        usuario=usuario,
+        accion="ACTIVADO" if usuario.estado else "DESACTIVADO",
+        motivo=motivo
+    )
+
+    messages.success(request, "Cuenta actualizada exitosamente")
+
+    return redirect("lista_usuarios")

@@ -3,6 +3,15 @@
 
 <h2>Gestión de usuarios</h2>
 
+<!-- # Mensaje de confirmación: Cuenta actualizada exitosamente Jhonier-->
+{% if messages %}
+  {% for message in messages %}
+    <div style="padding:10px; margin-bottom:10px; border:1px solid #ccc; background:#e6ffe6;">
+      {{ message }}
+    </div>
+  {% endfor %}
+{% endif %}
+
 <form method="get" style="margin-bottom: 1rem;">
   <input type="text" name="nombre" placeholder="Nombre" value="{{ nombre }}"/>
 
@@ -49,7 +58,37 @@
         <td>{{ u.email }}</td>
         <td>{{ u.telefono }}</td>
         <td>
-          <a href="{% url 'ver_usuario_admin' u.id %}">Ver</a>
+          <td>
+            <a href="{% url 'ver_usuario_admin' u.id %}">Ver</a>
+
+            {% if u.rol != "Administrador" %}
+              <form method="POST" action="{% url 'cambiar_estado_usuario' u.id %}" style="display:inline;">
+                {% csrf_token %}
+
+                <input type="text" name="motivo" placeholder="Motivo" style="width:100px;">
+
+                {% if u.estado %}
+                  <button type="submit"
+                          onclick="return confirm('¿Seguro que desea DESACTIVAR este usuario?')"
+                          style="background-color:red;color:white;">
+                    Desactivar
+                  </button>
+                {% else %}
+                  <button type="submit"
+                          onclick="return confirm('¿Seguro que desea ACTIVAR este usuario?')"
+                          style="background-color:green;color:white;">
+                    Activar
+                  </button>
+                {% endif %}
+
+              </form>
+            {% else %}
+              <span style="color:gray;">Protegido</span>
+            {% endif %}
+
+          </td>
+
+
           {# placeholders para lo que pidas luego #}
           {# <a href="#">Editar</a> #}
           {# <a href="#">Deshabilitar</a> #}

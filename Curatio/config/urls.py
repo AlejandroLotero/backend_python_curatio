@@ -65,7 +65,12 @@ urlpatterns = [
     #ADMIN lista usuarios
     path('accounts/usuarios/', account_views.lista_usuarios, name='lista_usuarios'),
     
+    #ADMIN Habilitar y deshabilitar
+    path('accounts/cambiar-estado/<int:user_id>/', account_views.cambiar_estado_usuario, name='cambiar_estado'),
 
+    #Cambiar estado de usuario
+    path(
+    'accounts/cambiar-estado/<int:user_id>/', account_views.cambiar_estado_usuario, name='cambiar_estado_usuario'),
 ]
 
 if settings.DEBUG:
