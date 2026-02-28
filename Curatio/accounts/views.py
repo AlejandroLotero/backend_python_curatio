@@ -121,35 +121,156 @@ def lista_usuarios(request):
     }
     return render(request, "accounts/lista_usuarios.html", context)
 
-#METODO CAMBIAR ESTADO DE USUARIO Realizado JG
-@login_required
-def cambiar_estado_usuario(request, user_id):
+#Importaciones para Generación de reportes de usuarios 
+from django.http import HttpResponse
+from openpyxl import Workbook
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from io import BytesIO
+from django.contrib import messages
 
-    # Solo ADMIN
+@login_required
+def generar_reporte_usuarios(request):
+
+    # 🔐 Validar rol ADMIN
     if request.user.rol != "Administrador":
         return redirect("login")
 
-    usuario = get_object_or_404(User, id=user_id)
+    formato = request.GET.get("formato")  # excel o pdf
 
-    # No permitir desactivar administradores
-    if usuario.rol == "Administrador":
-        messages.error(request, "No se puede desactivar un administrador")
+    # ===== Reutilizamos lógica de filtros =====
+    qs = User.objects.all()
+
+    nombre = (request.GET.get("nombre") or "").strip()
+    rol = (request.GET.get("rol") or "").strip()
+    estado = (request.GET.get("estado") or "").strip()
+    documento = (request.GET.get("documento") or "").strip()
+
+    if nombre:
+        qs = qs.filter(nombre__icontains=nombre)
+
+    if rol:
+        qs = qs.filter(rol=rol)
+
+    if estado != "":
+        if estado in ["1", "true", "True", "activo", "Activo"]:
+            qs = qs.filter(estado=True)
+        elif estado in ["0", "false", "False", "inactivo", "Inactivo"]:
+            qs = qs.filter(estado=False)
+
+    if documento:
+        qs = qs.filter(
+            Q(numero_documento__icontains=documento) |
+            Q(tipo_documento__icontains=documento)
+        )
+
+    # 🔎 Si no hay datos
+    if not qs.exists():
+        messages.warning(request, "No existen datos para el filtro seleccionado.")
         return redirect("lista_usuarios")
 
-    motivo = request.POST.get("motivo", "")
+    # =========================
+    # 📊 GENERAR EXCEL
+    # =========================
+    if formato == "excel":
 
-    # Cambiar estado
-    usuario.estado = not usuario.estado
-    usuario.save()
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Reporte Usuarios"
 
-    # Guardar bitácora
-    BitacoraUsuario.objects.create(
-        admin=request.user,
-        usuario=usuario,
-        accion="ACTIVADO" if usuario.estado else "DESACTIVADO",
-        motivo=motivo
-    )
+        headers = [
+            "Nombre completo",
+            "Tipo documento",
+            "Número documento",
+            "Tipo usuario",
+            "Fecha inicio",
+            "Fecha finalización",
+            "Correo electrónico",
+            "Teléfono",
+            "Dirección",
+            "Estado",
+        ]
 
-    messages.success(request, "Cuenta actualizada exitosamente")
+        ws.append(headers)
+
+        for u in qs:
+            ws.append([
+                u.nombre,
+                u.tipo_documento,
+                u.numero_documento,
+                u.rol,
+                u.fecha_inicio.strftime("%Y-%m-%d") if u.fecha_inicio else "",
+                u.fecha_fin.strftime("%Y-%m-%d") if u.fecha_fin else "",
+                u.email,
+                u.telefono,
+                u.direccion,
+                "Activo" if u.estado else "Inactivo",
+            ])
+
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = 'attachment; filename="reporte_usuarios.xlsx"'
+
+        wb.save(response)
+        return response
+
+    # =========================
+    # 📄 GENERAR PDF
+    # =========================
+    elif formato == "pdf":
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        elements = []
+
+        data = [[
+            "Nombre",
+            "Tipo Doc",
+            "Número",
+            "Rol",
+            "Inicio",
+            "Fin",
+            "Email",
+            "Teléfono",
+            "Dirección",
+            "Estado",
+        ]]
+
+        for u in qs:
+            data.append([
+                u.nombre,
+                u.tipo_documento,
+                u.numero_documento,
+                u.rol,
+                str(u.fecha_inicio or ""),
+                str(u.fecha_fin or ""),
+                u.email,
+                u.telefono,
+                u.direccion,
+                "Activo" if u.estado else "Inactivo",
+            ])
+
+        table = Table(data, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ]))
+
+        elements.append(table)
+        doc.build(elements)
+
+        buffer.seek(0)
+
+        response = HttpResponse(buffer, content_type="application/pdf")
+        response["Content-Disposition"] = 'attachment; filename="reporte_usuarios.pdf"'
+
+        return response
 
     return redirect("lista_usuarios")
+
+
