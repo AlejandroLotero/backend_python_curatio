@@ -51,7 +51,12 @@ urlpatterns = [
     #Generación de reporte de usuarios 
     path('accounts/reporte-usuarios/', account_views.generar_reporte_usuarios, name='reporte_usuarios'),
     
+    #ADMIN Habilitar y deshabilitar
+    path('accounts/cambiar-estado/<int:user_id>/', account_views.cambiar_estado_usuario, name='cambiar_estado'),
 
+    #Cambiar estado de usuario
+    path(
+    'accounts/cambiar-estado/<int:user_id>/', account_views.cambiar_estado_usuario, name='cambiar_estado_usuario'),
 ]
 
 if settings.DEBUG:
