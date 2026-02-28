@@ -4,26 +4,43 @@
 <h2>Gestión de usuarios</h2>
 
 <form method="get" style="margin-bottom: 1rem;">
-  <input type="text" name="nombre" placeholder="Nombre" value="{{ nombre }}"/>
+   <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
 
-  <select name="rol">
-    <option value="">-- Rol --</option>
-    {% for value,label in roles %}
-      <option value="{{ value }}" {% if rol == value %}selected{% endif %}>{{ label }}</option>
-    {% endfor %}
-  </select>
+    <input type="text" name="nombre" placeholder="Nombre" value="{{ nombre }}"/>
 
-  <select name="estado">
-    <option value="">-- Estado --</option>
-    <option value="1" {% if estado == "1" or estado == "true" or estado == "True" %}selected{% endif %}>Activo</option>
-    <option value="0" {% if estado == "0" or estado == "false" or estado == "False" %}selected{% endif %}>Inactivo</option>
-  </select>
+    <select name="rol">
+      <option value="">-- Rol --</option>
+      {% for value,label in roles %}
+        <option value="{{ value }}" {% if rol == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
 
-  <input type="text" name="documento" placeholder="Documento (tipo o número)" value="{{ documento }}"/>
+    <select name="estado">
+      <option value="">-- Estado --</option>
+      <option value="1" {% if estado == "1" or estado == "true" or estado == "True" %}selected{% endif %}>Activo</option>
+      <option value="0" {% if estado == "0" or estado == "false" or estado == "False" %}selected{% endif %}>Inactivo</option>
+    </select>
 
-  <button type="submit">Filtrar</button>
-  <a href="{% url 'lista_usuarios' %}">Limpiar</a>
+    <input type="text" name="documento" placeholder="Documento (tipo o número)" value="{{ documento }}"/>
+
+    <button type="submit">Filtrar</button>
+
+    <a href="{% url 'lista_usuarios' %}">Limpiar</a>
+
+    <!-- BOTONES REPORTE -->
+     <div style="display:flex; gap:8px;">
+    <a href="/accounts/reporte-usuarios/?formato=excel&nombre={{ nombre }}&rol={{ rol }}&estado={{ estado }}&documento={{ documento }}">
+      📊 Descargar Excel
+    </a>
+
+    <a href="/accounts/reporte-usuarios/?formato=pdf&nombre={{ nombre }}&rol={{ rol }}&estado={{ estado }}&documento={{ documento }}">
+      📄 Descargar PDF
+    </a>
+    </div>
+
+  </div>
 </form>
+
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
   <thead>

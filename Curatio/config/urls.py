@@ -65,6 +65,9 @@ urlpatterns = [
     #ADMIN lista usuarios
     path('accounts/usuarios/', account_views.lista_usuarios, name='lista_usuarios'),
     
+    #Generación de reporte de usuarios 
+    path('accounts/reporte-usuarios/', account_views.generar_reporte_usuarios, name='reporte_usuarios'),
+    
 
 ]
 
