@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Curatio | Crear medicamento{% endblock %}
+
+{% block content %}
+<h2 style="margin:0 0 12px;">Crear medicamento (RFADMIN08)</h2>
+
+<form method="post" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
+  {% csrf_token %}
+
+  <div>
+    <label>Nombre</label>
+    {{ form.nombre }}
+  </div>
+
+  <div>
+    <label>Forma farmacéutica</label>
+    {{ form.forma }}
+  </div>
+
+  <div>
+    <label>Presentación</label>
+    {{ form.presentacion }}
+  </div>
+
+  <div>
+    <label>Concentración</label>
+    {{ form.concentracion }}
+  </div>
+
+  <div>
+    <label>Vía de administración</label>
+    {{ form.via_administracion }}
+  </div>
+
+  <div>
+    <label>Laboratorio</label>
+    {{ form.laboratorio }}
+  </div>
+
+  <div>
+    <label>Lote</label>
+    {{ form.lote }}
+  </div>
+
+  <div>
+    <label>Fecha fabricación</label>
+    {{ form.fecha_fabricacion }}
+  </div>
+
+  <div>
+    <label>Fecha vencimiento</label>
+    {{ form.fecha_vencimiento }}
+  </div>
+
+  <div>
+    <label>Stock</label>
+    {{ form.stock }}
+  </div>
+
+  <div>
+    <label>Precio compra</label>
+    {{ form.precio_compra }}
+  </div>
+
+  <div>
+    <label>Precio venta</label>
+    {{ form.precio_venta }}
+  </div>
+
+  <div>
+    <label>Proveedor</label>
+    {{ form.proveedor }}
+  </div>
+
+  <div>
+    <label>Farmaceuta responsable (opcional)</label>
+    {{ form.responsable }}
+  </div>
+
+  <div style="grid-column: 1 / -1;">
+    <label>Descripción</label>
+    {{ form.descripcion }}
+  </div>
+
+  <div>
+    <label>Estado</label>
+    {{ form.estado }}
+  </div>
+
+  <div style="grid-column: 1 / -1; margin-top:6px;">
+    {% if form.errors %}
+      <div style="padding:10px 12px; border-radius:12px; border:1px solid rgba(255,93,93,.35); background: rgba(255,93,93,.10);">
+        Revisa los campos marcados. {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+  </div>
+
+  <div style="grid-column: 1 / -1; display:flex; gap:10px; margin-top:6px;">
+    <button type="submit" class="btn primary">Guardar</button>
+    <a class="btn" href="{% url 'dashboard' %}">Volver</a>
+  </div>
+</form>
+
+<script>
+  (function(){
+    const formaSelect = document.getElementById("id_forma");
+    const presSelect = document.getElementById("id_presentacion");
+
+    if (!formaSelect || !presSelect) return;
+
+    async function cargarPresentaciones(){
+      const formaId = formaSelect.value;
+      presSelect.innerHTML = '<option value="">---------</option>';
+
+      if (!formaId) return;
+
+      const resp = await fetch("{% url 'presentaciones_por_forma' %}?forma_id=" + encodeURIComponent(formaId));
+      if (!resp.ok) return;
+
+      const data = await resp.json();
+      for (const item of (data.results || [])){
+        const opt = document.createElement("option");
+        opt.value = item.id;
+        opt.textContent = item.nombre;
+        presSelect.appendChild(opt);
+      }
+    }
+
+    formaSelect.addEventListener("change", cargarPresentaciones);
+  })();
+</script>
+{% endblock %}
