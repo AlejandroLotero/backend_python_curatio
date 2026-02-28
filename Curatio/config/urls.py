@@ -48,6 +48,9 @@ urlpatterns = [
     path("accounts/", include("accounts.urls")),
     path("products/", include("products.urls")),
     
+    #Generación de reporte de usuarios 
+    path('accounts/reporte-usuarios/', account_views.generar_reporte_usuarios, name='reporte_usuarios'),
+    
 
 ]
 
