@@ -121,7 +121,7 @@ def lista_usuarios(request):
     }
     return render(request, "accounts/lista_usuarios.html", context)
 
-#METODO CAMBIAR ESTADO DE USUARIO
+#METODO CAMBIAR ESTADO DE USUARIO Realizado JG
 @login_required
 def cambiar_estado_usuario(request, user_id):
 
