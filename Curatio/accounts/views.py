@@ -69,6 +69,40 @@ def ver_usuario(request, user_id=None):
     return render(request, "accounts/ver_usuario.html", {"usuario": usuario})
 
 
+#METODO CAMBIAR ESTADO DE USUARIO
+@login_required
+def cambiar_estado_usuario(request, user_id):
+
+    # Solo ADMIN
+    if request.user.rol != "Administrador":
+        return redirect("login")
+
+    usuario = get_object_or_404(User, id=user_id)
+
+    # No permitir desactivar administradores
+    if usuario.rol == "Administrador":
+        messages.error(request, "No se puede desactivar un administrador")
+        return redirect("lista_usuarios")
+
+    motivo = request.POST.get("motivo", "")
+
+    # Cambiar estado
+    usuario.estado = not usuario.estado
+    usuario.save()
+
+    # Guardar bitácora
+    BitacoraUsuario.objects.create(
+        admin=request.user,
+        usuario=usuario,
+        accion="ACTIVADO" if usuario.estado else "DESACTIVADO",
+        motivo=motivo
+    )
+
+    messages.success(request, "Cuenta actualizada exitosamente")
+
+    return redirect("lista_usuarios")
+
+
 @login_required
 def lista_usuarios(request):
     # Validar rol ADMIN
