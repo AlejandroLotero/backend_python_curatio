@@ -1,0 +1,75 @@
+Id: RFADMIN13	
+
+Nombre: Generar reporte de medicamento	
+
+Actor: ADMIN	
+
+Descripcion:El administrador puede generar reportes de los medicamentos registrados en el sistema, permitiendo filtrar por estado (Activo, Vencido, Agotado, Suspendito). El reporte incluye toda la información registrada en el momento de la creación del medicamento y puede descargarse en formatos Excel o PDF.
+
+Entradas:	
+1. Selección de tipo de reporte:
+–Medicamento Activo
+-Medicamento Vencido
+-Medicamento Agotado
+-Medicamento Suspendido
+– Todos
+2. Botón “Generar reporte.
+
+Proceso interno:	
+
+1. ADMIN accede al módulo de reportes
+2. Selecciona tipo de medicamento a incluir en el reporte
+3. El sistema filtra los registros según la selección
+4. Genera el archivo con la información correspondiente
+5. Ofrece descarga en Excel y PDF	
+
+Salida esperada:
+
+1. Archivo descargable (Excel o PDF)
+2. Contiene los siguientes campos:
+-Nombre
+-Formas Farmacéuticas (Especial / Líquidas / Gaseosas / Semisólidas / Sólidas)
+-Presentación (Para Especiales: Colirio / Colutorio / Enjuage Bucal / Dentifríco / Desinfectante - Antiséptico / Loción / Parche transdérmico / Pomada oftálmica / Solución nasal - Spray nasal. Para Gaseosas: Aerosol - Spray / Inhalador / Nebulizador. 
+Para Líquidas: Enema / Emulsión / Gotas / Infusión - Concentrado para diluir / Inyectable - Ampolla - Frasco ámpula / Jarabe / Solución oral / Suspensión. 
+Para Semisólidas: Crema / Gel / Linimento - Bálsamo / Pasta / Ungüento - Pomada. 
+Para Sólidas: Cápsula / Gragea / Granulado / Implante / Pastilla / Píldora / Polvo / Supositorio / Óvulo)
+
+-Concentración
+-Vía Administración (Bucal / Cutánea / Inhalatoria / Intrádermica / Intramuscular / Intravenosa / Nasal / Oftálmica / Oral / Ótica / Rectal / Subcutánea / Sublingual / Transdérmica / Uretral / Vaginal).
+
+-Laboratorio (Abbott Laboratories de Colombia S.A. / Andromaco / Bagó / Bayer S.A. / Blaskov S.A. / Boehringer Ingelheim Ltda. / Colpharma S.A. / Disanfar S.A. / Eli Lilly Interamérica Inc. / Farma de Colombia S.A.S. / Genfar S.A. / GlaxoSmithKline (GSK) / Grünenthal de Colombia S.A. / Johnson & Johnson de Colombia S.A. / Lafrancol S.A.S. / Laproff S.A. / La Santé S.A. / Merck Sharp & Dohme (MSD) / MK / Novartis de Colombia S.A. / Pfizer Ltda. / ProCaps S.A.S. / Roche S.A. / Ropsohn Therapeutics S.A. / Sanofi Aventis de Colombia S.A. / Servier de Colombia Ltda. / Synthesis S.A. / Tecnoquímicas S.A. (TQ)).
+ 
+-Lote
+-Fecha de Fabricación
+-Fecha de Vencimiento
+-Stock
+-Precio de compra
+-Precio de venta
+-Proveedor
+-Requiere Fórmula (Si/No. Por defecto No)
+-Descripción
+-Estado (Activo / Vencido / Agotado / Suspendido. Por defecto Activo).
+3. Mensaje de confirmación cuando el archivo esté listo para descarga.
+4.Mensaje de error en caso de que no existan registros o se produzca un fallo en la generación del reporte.
+
+Reglas de negocio:
+
+1. El formato de salida debe ser Excel o PDF según la elección del ADMIN.
+2. Si no hay datos coincidentes, debe mostrar mensaje de alerta.
+3.El reporte debe incluir metadatos como fecha y hora de generación, y usuario que lo solicitó.
+4. Si no hay datos coincidentes, debe mostrar mensaje de alerta."	
+
+Prioridad:
+Media	
+
+Dependencia;
+
+Requiere que existan registros de medicamentos creados mediante RFADMIN08.	
+
+Seguridad:
+Requiere sesión activa.
+Validación previa del filtro elegido.
+Autorización de exportación.
+
+Observaciones:
+El reporte debe llevar encabezado con nombre del sistema, fecha de generación y usuario que generó el reporte.

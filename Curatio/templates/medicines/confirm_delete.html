@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="alert alert-warning">
+            <h4>⚠️ Confirmar eliminación</h4>
+            <p>¿Está seguro de que desea eliminar el medicamento <strong>{{ medicine.name }}</strong>?</p>
+        </div>
+
+        <form method="POST">
+            {% csrf_token %}
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <a href="{% url 'medicine_detail' medicine.id %}" class="btn btn-secondary">Cancelar</a>
+                <button type="submit" class="btn btn-danger">Sí, eliminar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

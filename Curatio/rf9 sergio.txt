@@ -1,0 +1,40 @@
+id- RFADMIN09
+
+Nombre: Visualizar medicamento	
+
+Actor: ADMIN	
+
+Descripcion: El ADMIN puede consultar un medicamento previamente registrado en el requerimiento "RFADMIN08". Se ejecuta desde el módulo de Medicamentos, y esta vista solo permite ver, sin opciones de modificaciones	
+
+Entradas: 
+1. ID del medicamento a consultar
+2. Nombre del medicamento a consultar"	
+
+Proceso interno:
+1. ADMIN accede al módulo de Medicamento  
+2. Validar que el usuario tenga permisos de ADMIN.
+3. Recibir como parámetro el ID o nombre del medicamento.
+4. El sistema busca el medicamento en la base de datos.
+5. Presentar la información en una vista de solo lectura, sin opción de actualización."	
+
+Salida esperada:
+1. Visualización completa de los datos del medicamento.
+2. Mensaje de error si el nombre del medicamento no existe o el ID no es válido.
+3. Mensaje de error en caso de no encontrarse el medicamento o si se presentan inconsistencias en la validación."	
+
+Reglas de negocio
+1. La información mostrada es de solo lectura, sin posibilidad de edición.
+2. Debe existir coincidencia exacta entre el parámetro ingresado (ID) y un registro en la base de datos.
+3. En caso que la búsqueda por nombre coincida en el nombre con algún elmento existente y que solo difiera en 1 o 2 letras con algún elemento del inventario. El sistema debe debe mostrar los elementos como sugerencia.	
+
+Prioridad: Alta	
+
+Dependencia:
+Inicio de sesión. 
+Requiere que el medicamento esté previamente registrado mediante RFADMIN08	
+
+Seguridad:
+Validación de sesión activa	
+
+Observaciones:
+Puede habilitarse botón de “Editar” si se cuenta con permisos según rol. Vista diseñada para formato responsive.

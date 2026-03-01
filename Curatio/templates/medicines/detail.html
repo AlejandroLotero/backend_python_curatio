@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h2>📄 {{ medicine.name }}</h2>
+        
+        <div class="card mt-4">
+            <div class="card-body">
+                <p><strong>ID:</strong> {{ medicine.id }}</p>
+                <p><strong>Ingrediente Activo:</strong> {{ medicine.active_ingredient }}</p>
+                <p><strong>Descripción:</strong> {{ medicine.description }}</p>
+                <p>
+                    <strong>Estado:</strong>
+                    {% if medicine.is_active %}
+                        <span class="badge bg-success">Activo</span>
+                    {% else %}
+                        <span class="badge bg-danger">Inactivo</span>
+                    {% endif %}
+                </p>
+                <p><strong>Creado:</strong> {{ medicine.created_at }}</p>
+                <p><strong>Actualizado:</strong> {{ medicine.updated_at }}</p>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <a href="{% url 'medicine_update' medicine.id %}" class="btn btn-warning">✏️ Editar</a>
+            <a href="{% url 'medicine_delete' medicine.id %}" class="btn btn-danger">🗑️ Eliminar</a>
+            <a href="{% url 'medicine_list' %}" class="btn btn-secondary">Volver</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

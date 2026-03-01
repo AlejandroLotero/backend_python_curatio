@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>📋 Medicamentos</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{% url 'medicine_create' %}" class="btn btn-primary">
+            ➕ Crear Medicamento
+        </a>
+    </div>
+</div>
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    {% endfor %}
+{% endif %}
+
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Ingrediente Activo</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for medicine in medicines %}
+            <tr>
+                <td>{{ medicine.id }}</td>
+                <td>{{ medicine.name }}</td>
+                <td>{{ medicine.active_ingredient }}</td>
+                <td>
+                    {% if medicine.is_active %}
+                        <span class="badge bg-success">Activo</span>
+                    {% else %}
+                        <span class="badge bg-danger">Inactivo</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'medicine_detail' medicine.id %}" class="btn btn-sm btn-info">👁️ Ver</a>
+                    <a href="{% url 'medicine_update' medicine.id %}" class="btn btn-sm btn-warning">✏️ Editar</a>
+                    <a href="{% url 'medicine_delete' medicine.id %}" class="btn btn-sm btn-danger">🗑️ Eliminar</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center text-muted">No hay medicamentos registrados</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

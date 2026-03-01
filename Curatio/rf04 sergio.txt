@@ -1,0 +1,50 @@
+ID RFADMIN01	
+Nombre: Actualizar cuenta de usuario creado	
+Actor; ADMIN	
+Descripción: El usuario con rol ADMIN podrá modificar los datos de una cuenta de usuario previamente creada desde el módulo de gestión de usuarios.	
+Entradas: 1. Selección del usuario a actualizar
+2. Campos a editar:
+ 2.1- Nombre
+  2.2-Tipo de documento
+  2.3- Número de documento
+  2.4- Tipo de usuario
+  2.5- Correo electrónico
+  2.6- Teléfonos
+  2.7- Dirección
+  2.9- Estado
+  2.10- Fechas (inicio y finalización)
+  2.11- Foto de perfil
+	   
+Proceso interno:1. ADMIN ingresa al módulo de gestión de usuarios
+2. Selecciona al usuario a modificar desde una lista o buscador
+3. El sistema carga los datos actuales del usuario
+4. ADMIN edita los campos permitidos
+5. El sistema valida los cambios (ej. unicidad del correo, formato, condiciones)
+6. ADMIN confirma los cambios
+7. El sistema actualiza la base de datos
+
+Salida esperada:1. Datos del usuario actualizados correctamente
+2. Mensaje de confirmación: “Cuenta actualizada exitosamente”
+3. Registro de la modificación en bitácora interna (opcional)
+
+
+
+Reglas de negocio: 1. Solo ADMIN puede modificar cuentas
+2. No se puede cambiar el número de documento si ya está en uso
+3. Si tipo de usuario es Farmaceuta, las fechas son obligatorias
+4. No se permite cambiar a un usuario con estado “Inactivo” sin justificación visible
+
+	
+Prioridad: alta
+	
+Dependencia:Requiere autenticación ADMIN y cuenta existente
+	
+Seguridad:Validación de rol ADMIN
+Validación de sesión activa
+Validación de campos obligatorios y formato
+	
+Observaciones:Se recomienda agregar botón “Cancelar cambios” en U
+				
+
+	
+

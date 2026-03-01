@@ -25,7 +25,8 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
-from accounts import views as account_views 
+from accounts import views as account_views
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView 
 
 # urlpatterns = [
 #     path('admin-panel/', admin.site.urls),
@@ -39,9 +40,20 @@ from accounts import views as account_views
 urlpatterns = [
     path('admin-panel/', admin.site.urls),
     path('login/', auth_views.LoginView.as_view(template_name='accounts/login.html'), name='login'),
+    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
     
-    # Esta es la ruta que te falta para el error 404:
+    # Dashboard
     path('', account_views.dashboard, name='dashboard'),
+    
+    # Vistas Web - Medicamentos (RFADMIN09)
+    path('medicines/', include('medicines.urls')),
+    
+    # API REST - Autenticación JWT
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    
+    # API REST - Medicamentos
+    path('api/medicines/', include('medicines.urls')),
     
     # Rutas de recuperación
     path('password-reset/', auth_views.PasswordResetView.as_view(), name='password_reset'),
