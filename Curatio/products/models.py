@@ -145,12 +145,18 @@ class Medicamento(models.Model):
     def __str__(self):
         return f"{self.nombre} ({self.presentacion})"
 
+    @property
+    def puede_venderse(self):
+        """Regla de negocio: solo medicamento Activo puede venderse. Vencido/Agotado/Suspendido = No disponible."""
+        return self.estado and self.estado.nombre == "Activo"
+
 
 class MedicamentoHistorial(models.Model):
     ACCIONES = (
         ("CREADO", "CREADO"),
         ("ACTUALIZADO", "ACTUALIZADO"),
         ("DESHABILITADO", "DESHABILITADO"),
+        ("CAMBIO_ESTADO", "CAMBIO_ESTADO"),
     )
     medicamento = models.ForeignKey(Medicamento, on_delete=models.CASCADE, related_name="historial")
     accion = models.CharField(max_length=20, choices=ACCIONES)
