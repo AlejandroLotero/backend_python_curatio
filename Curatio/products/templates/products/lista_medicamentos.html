@@ -125,3 +125,10 @@
 </div>
 
 {% endblock %}
+
+<th>Acciones</th>
+<td>
+
+<a href="{% url 'editar_medicamento' m.pk %}" class="btn">Editar</a>
+
+<form method="post" action="{% url 'cambiar_estado_medicamento' m.pk %}">

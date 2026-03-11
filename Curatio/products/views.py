@@ -1,5 +1,8 @@
 from django.shortcuts import render
 
+#Importación para editar medicamento 
+from .forms import CrearMedicamentoForm, ActualizarMedicamentoForm
+
 # Create your views here.
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
@@ -329,3 +332,46 @@ def reporte_medicamentos(request):
         return response
 
     return redirect("listar_medicamentos")
+
+@login_required
+def editar_medicamento(request, pk):
+
+    if request.user.rol != "Administrador":
+        return redirect("login")
+
+    medicamento = Medicamento.objects.filter(pk=pk).first()
+
+    if not medicamento:
+        messages.error(request, "Medicamento no encontrado.")
+        return redirect("listar_medicamentos")
+
+    if request.method == "POST":
+
+        form = ActualizarMedicamentoForm(request.POST, instance=medicamento)
+
+        if form.is_valid():
+
+            med = form.save()
+
+            MedicamentoHistorial.objects.create(
+                medicamento=med,
+                accion="ACTUALIZADO",
+                usuario=request.user,
+                detalle="Medicamento actualizado desde el módulo de gestión."
+            )
+
+            messages.success(request, "Medicamento actualizado correctamente.")
+
+            return redirect("listar_medicamentos")
+
+    else:
+        form = ActualizarMedicamentoForm(instance=medicamento)
+
+    return render(
+        request,
+        "products/editar_medicamento.html",
+        {
+            "form": form,
+            "medicamento": medicamento
+        }
+    )
