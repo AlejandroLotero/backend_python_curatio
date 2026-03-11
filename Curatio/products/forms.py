@@ -42,3 +42,35 @@ class CrearMedicamentoForm(forms.ModelForm):
         if pv is not None and pv < 0:
             raise forms.ValidationError("El precio de venta no puede ser negativo.")
         return cleaned
+    
+class ActualizarMedicamentoForm(forms.ModelForm):
+
+    class Meta:
+        model = Medicamento
+        exclude = ["requiere_formula", "creado_por", "creado_en"]
+
+        widgets = {
+            "fecha_fabricacion": forms.DateInput(attrs={"type": "date"}),
+            "fecha_vencimiento": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields["presentacion"].queryset = Presentacion.objects.none()
+
+        if "forma" in self.data:
+            try:
+                forma_id = int(self.data.get("forma"))
+                self.fields["presentacion"].queryset = Presentacion.objects.filter(
+                    forma_id=forma_id,
+                    activo=True
+                )
+            except (ValueError, TypeError):
+                pass
+
+        elif self.instance.pk:
+            self.fields["presentacion"].queryset = Presentacion.objects.filter(
+                forma=self.instance.forma,
+                activo=True
+            )
