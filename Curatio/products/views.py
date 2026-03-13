@@ -415,6 +415,6 @@ def crear_proveedor(request):
 
     return render(
         request,
-        "products/suppliers/crear_proveedor.html",
+        "suppliers/crear_proveedor.html",
         {"form": form}
     )

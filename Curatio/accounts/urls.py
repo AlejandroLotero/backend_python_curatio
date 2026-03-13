@@ -49,6 +49,4 @@ urlpatterns = [
     #Cambiar estado de usuario
     path(
     'accounts/cambiar-estado/<int:user_id>/', account_views.cambiar_estado_usuario, name='cambiar_estado_usuario'),
-    #Crear proveedor
-    path("products/templates/products/suppliers/crear/", product_views.crear_proveedor, name="crear_proveedor"),
 ]

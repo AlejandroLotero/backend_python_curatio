@@ -19,7 +19,7 @@ class CrearMedicamentoForm(forms.ModelForm):
         # Por defecto, presentación vacía hasta que elijan forma
         self.fields["presentacion"].queryset = Presentacion.objects.none()
 
-        if "forma" in self.data:
+        if self.data and "forma" in self.data:
             try:
                 forma_id = int(self.data.get("forma"))
                 self.fields["presentacion"].queryset = Presentacion.objects.filter(forma_id=forma_id, activo=True).order_by("nombre")
@@ -62,7 +62,7 @@ class ActualizarMedicamentoForm(forms.ModelForm):
 
         self.fields["presentacion"].queryset = Presentacion.objects.none()
 
-        if "forma" in self.data:
+        if self.data and "forma" in self.data:
             try:
                 forma_id = int(self.data.get("forma"))
                 self.fields["presentacion"].queryset = Presentacion.objects.filter(
