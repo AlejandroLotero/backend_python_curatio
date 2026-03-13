@@ -14,5 +14,8 @@ urlpatterns = [
     path("api/presentaciones/", views.presentaciones_por_forma, name="presentaciones_por_forma"),
     #URL para editar medicamento Daya 
     path("medicamentos/<int:pk>/editar/", views.editar_medicamento, name="editar_medicamento"),
+    #URL para crear proveedor
+    path("proveedores/crear/", views.crear_proveedor, name="crear_proveedor"),
+
 
 ]

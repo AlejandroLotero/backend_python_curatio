@@ -192,6 +192,7 @@
           <div class="nav-section">Medicamentos</div>
           <a href="{% url 'listar_medicamentos' %}">Listar medicamentos <span class="pill">ADMIN</span></a>
           <a href="{% url 'crear_medicamento' %}">Crear medicamento <span class="pill">ADMIN</span></a>
+          <a href="{% url 'crear_proveedor' %}">Crear proveedor <span class="pill">ADMIN</span></a>
       {% endif %}
 
       <div class="nav-section">Seguridad</div>
@@ -228,6 +229,7 @@
           <a class="btn" href="{% url 'listar_medicamentos' %}">Medicamentos</a>
           <a class="btn" href="{% url 'crear_usuario' %}">Crear usuario</a>
           <a class="btn" href="{% url 'crear_medicamento' %}">Crear medicamento</a>
+          <a class="btn" href="{% url 'crear_proveedor' %}">Crear proveedor</a>
         {% endif %}
         {% if user.is_authenticated %}
           <a class="btn" href="{% url 'mi_perfil' %}">Perfil</a>

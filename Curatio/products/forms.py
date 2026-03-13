@@ -1,5 +1,8 @@
 from django import forms
 from .models import Medicamento, Presentacion
+from .models import Proveedor
+import re
+
 
 class CrearMedicamentoForm(forms.ModelForm):
     class Meta:
@@ -16,7 +19,7 @@ class CrearMedicamentoForm(forms.ModelForm):
         # Por defecto, presentación vacía hasta que elijan forma
         self.fields["presentacion"].queryset = Presentacion.objects.none()
 
-        if "forma" in self.data:
+        if self.data and "forma" in self.data:
             try:
                 forma_id = int(self.data.get("forma"))
                 self.fields["presentacion"].queryset = Presentacion.objects.filter(forma_id=forma_id, activo=True).order_by("nombre")
@@ -59,7 +62,7 @@ class ActualizarMedicamentoForm(forms.ModelForm):
 
         self.fields["presentacion"].queryset = Presentacion.objects.none()
 
-        if "forma" in self.data:
+        if self.data and "forma" in self.data:
             try:
                 forma_id = int(self.data.get("forma"))
                 self.fields["presentacion"].queryset = Presentacion.objects.filter(
@@ -74,3 +77,21 @@ class ActualizarMedicamentoForm(forms.ModelForm):
                 forma=self.instance.forma,
                 activo=True
             )
+
+class CrearProveedorForm(forms.ModelForm):
+
+    class Meta:
+        model = Proveedor
+
+        exclude = ["creado_por", "creado_en"]
+
+    def clean_nit(self):
+
+        nit = self.cleaned_data.get("nit")
+
+        if not re.match(r'^\d{8,10}-\d$', nit):
+            raise forms.ValidationError(
+                "Formato de NIT inválido. Ej: 12345678-9"
+            )
+
+        return nit            

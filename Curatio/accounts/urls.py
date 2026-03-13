@@ -4,6 +4,8 @@ from django.contrib.auth import views as auth_views
 from accounts import views as account_views
 from django.conf import settings
 from django.conf.urls.static import static
+from products import views as product_views
+
 
 urlpatterns = [
     path('', account_views.dashboard, name='dashboard'),

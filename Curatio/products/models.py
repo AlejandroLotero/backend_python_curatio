@@ -54,11 +54,49 @@ class EstadoMedicamento(models.Model):
 
 
 class Proveedor(models.Model):
-    nombre = models.CharField(max_length=120, unique=True)
-    activo = models.BooleanField(default=True)
+
+    ESTADOS = (
+        ("Activo", "Activo"),
+        ("Inactivo", "Inactivo"),
+    )
+
+    nit = models.CharField(max_length=12, unique=True)
+
+    nombre = models.CharField(max_length=120)
+
+    razon_social = models.CharField(max_length=150)
+
+    nombre_contacto = models.CharField(max_length=120)
+
+    telefono_contacto = models.CharField(max_length=20)
+
+    correo_contacto = models.EmailField()
+
+    direccion = models.CharField(max_length=200, blank=True)
+
+    ciudad = models.CharField(max_length=100, blank=True)
+
+    estado = models.CharField(
+        max_length=10,
+        choices=ESTADOS,
+        default="Activo"
+    )
+
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT
+    )
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        if not re.match(r'^\d{8,10}-\d$', self.nit):
+            raise ValidationError(
+                "El NIT debe tener entre 8 y 10 dígitos, guión y dígito verificador. Ej: 12345678-9"
+            )
 
     def __str__(self):
-        return self.nombre
+        return f"{self.nombre} ({self.nit})"
 
 
 # --- Entidad principal ---
@@ -166,3 +204,31 @@ class MedicamentoHistorial(models.Model):
 
     def __str__(self):
         return f"{self.medicamento_id} - {self.accion} - {self.fecha}"
+    
+class ProveedorHistorial(models.Model):
+
+    ACCIONES = (
+        ("CREADO", "CREADO"),
+        ("ACTUALIZADO", "ACTUALIZADO"),
+        ("CAMBIO_ESTADO", "CAMBIO_ESTADO"),
+    )
+
+    proveedor = models.ForeignKey(
+        Proveedor,
+        on_delete=models.CASCADE,
+        related_name="historial"
+    )
+
+    accion = models.CharField(max_length=20, choices=ACCIONES)
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT
+    )
+
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    detalle = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.proveedor.nombre} - {self.accion}"

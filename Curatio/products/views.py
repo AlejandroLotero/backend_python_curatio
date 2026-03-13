@@ -12,6 +12,9 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 #para exportar a excel y pdf
 from urllib.parse import urlparse
+#Creación de proveedor 
+from .forms import CrearProveedorForm
+from .models import Proveedor, ProveedorHistorial
 
 from .forms import CrearMedicamentoForm
 from .models import (
@@ -374,4 +377,44 @@ def editar_medicamento(request, pk):
             "form": form,
             "medicamento": medicamento
         }
+    )
+@login_required
+def crear_proveedor(request):
+
+    if request.user.rol != "Administrador":
+        return redirect("login")
+
+    if request.method == "POST":
+
+        form = CrearProveedorForm(request.POST)
+
+        if form.is_valid():
+
+            proveedor = form.save(commit=False)
+
+            proveedor.creado_por = request.user
+
+            proveedor.full_clean()
+
+            proveedor.save()
+
+            ProveedorHistorial.objects.create(
+                proveedor=proveedor,
+                accion="CREADO",
+                usuario=request.user,
+                detalle="Proveedor creado desde el módulo de gestión"
+            )
+
+            messages.success(request, "Proveedor creado exitosamente")
+
+            return redirect("crear_proveedor")
+
+    else:
+
+        form = CrearProveedorForm()
+
+    return render(
+        request,
+        "suppliers/crear_proveedor.html",
+        {"form": form}
     )
