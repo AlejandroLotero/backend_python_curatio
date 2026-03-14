@@ -16,6 +16,12 @@ urlpatterns = [
     path("medicamentos/<int:pk>/editar/", views.editar_medicamento, name="editar_medicamento"),
     #URL para crear proveedor
     path("proveedores/crear/", views.crear_proveedor, name="crear_proveedor"),
+    #URL para visualizar proveedor
+    path("proveedores/visualizar/", views.visualizar_proveedores, name="visualizar_proveedores"),
+    #URL para editar proveedor
+    path("proveedores/<int:pk>/editar/", views.editar_proveedor, name="editar_proveedor"),
+    #URL para cambiar estado proveedor
+    path("proveedores/<int:pk>/cambiar-estado/", views.cambiar_estado_proveedor, name="cambiar_estado_proveedor"),
 
 
 ]

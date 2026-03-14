@@ -13,8 +13,11 @@ from django.core.paginator import Paginator
 #para exportar a excel y pdf
 from urllib.parse import urlparse
 #Creación de proveedor 
-from .forms import CrearProveedorForm
+from .forms import CrearProveedorForm, ActualizarProveedorForm
 from .models import Proveedor, ProveedorHistorial
+from django.db.models import Q
+from difflib import SequenceMatcher
+from django.utils import timezone
 
 from .forms import CrearMedicamentoForm
 from .models import (
@@ -418,3 +421,173 @@ def crear_proveedor(request):
         "suppliers/crear_proveedor.html",
         {"form": form}
     )
+
+@login_required
+def visualizar_proveedores(request):
+    """
+    RFADMIN15 - Visualización de proveedores
+    Solo ADMIN. Permite consultar por NIT o nombre.
+    Vista de solo lectura, sin edición ni eliminación.
+    Si no encuentra coincidencia exacta, sugiere nombres parecidos.
+    """
+    if request.user.rol != "Administrador":
+        return redirect("login")
+
+    nit = (request.GET.get("nit") or "").strip()
+    nombre = (request.GET.get("nombre") or "").strip()
+
+    proveedores = Proveedor.objects.none()
+    sugerencias = Proveedor.objects.none()
+    busqueda_realizada = bool(nit or nombre)
+
+    if busqueda_realizada:
+        filtros = Q()
+
+        if nit:
+            filtros &= Q(nit__icontains=nit)
+
+        if nombre:
+            filtros &= Q(nombre__icontains=nombre)
+
+        proveedores = Proveedor.objects.filter(filtros).order_by("nombre")
+
+        # Si no hay resultados y se buscó por nombre, generar sugerencias
+        if not proveedores.exists() and nombre:
+            candidatos = Proveedor.objects.all().order_by("nombre")
+            sugeridos_ids = []
+
+            nombre_buscado = nombre.lower().strip()
+
+            for proveedor in candidatos:
+                nombre_proveedor = (proveedor.nombre or "").lower().strip()
+
+                # Similaridad aproximada
+                ratio = SequenceMatcher(None, nombre_buscado, nombre_proveedor).ratio()
+
+                # Regla aproximada para "1 o 2 letras de diferencia"
+                if ratio >= 0.75:
+                    sugeridos_ids.append(proveedor.id)
+
+            sugerencias = Proveedor.objects.filter(id__in=sugeridos_ids).order_by("nombre")
+
+        if not proveedores.exists() and not sugerencias.exists():
+            messages.warning(request, "No se encontraron proveedores con los criterios ingresados.")
+
+    context = {
+        "nit": nit,
+        "nombre": nombre,
+        "proveedores": proveedores,
+        "sugerencias": sugerencias,
+        "busqueda_realizada": busqueda_realizada,
+    }
+
+    return render(request, "suppliers/visualizar_proveedores.html", context)
+
+@login_required
+def editar_proveedor(request, pk):
+    """
+    RFADMIN16 - Actualizar proveedor
+    Solo ADMIN.
+    Permite editar campos autorizados del proveedor y registra el cambio en historial.
+    """
+    if request.user.rol != "Administrador":
+        return redirect("login")
+
+    proveedor = Proveedor.objects.filter(pk=pk).first()
+
+    if not proveedor:
+        messages.error(request, "Proveedor no encontrado.")
+        return redirect("visualizar_proveedores")
+
+    if request.method == "POST":
+        form = ActualizarProveedorForm(request.POST, instance=proveedor)
+
+        if form.is_valid():
+            proveedor_actualizado = form.save()
+
+            detalle = f"Proveedor actualizado el {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}."
+
+            ProveedorHistorial.objects.create(
+                proveedor=proveedor_actualizado,
+                accion="ACTUALIZADO",
+                usuario=request.user,
+                detalle=detalle
+            )
+
+            BitacoraUsuario.objects.create(
+                admin=request.user,
+                usuario=request.user,
+                accion="Actualización de proveedor",
+                motivo=f"Proveedor ID {proveedor_actualizado.pk} ({proveedor_actualizado.nombre}) actualizado."
+            )
+
+            messages.success(request, "Proveedor actualizado exitosamente.")
+            return redirect("visualizar_proveedores")
+
+    else:
+        form = ActualizarProveedorForm(instance=proveedor)
+
+    return render(
+        request,
+        "suppliers/editar_proveedor.html",
+        {
+            "form": form,
+            "proveedor": proveedor,
+        }
+    )
+
+
+@login_required
+def cambiar_estado_proveedor(request, pk):
+    """
+    RFADMIN17 - Habilitar/Deshabilitar proveedor
+    Solo ADMIN.
+    Cambia el estado Activo/Inactivo y registra el cambio en historial y bitácora.
+    """
+    if request.user.rol != "Administrador":
+        messages.error(request, "No tiene permisos para cambiar el estado del proveedor.")
+        return redirect("login")
+
+    if request.method != "POST":
+        messages.error(request, "Método no permitido.")
+        return redirect("visualizar_proveedores")
+
+    proveedor = Proveedor.objects.filter(pk=pk).first()
+
+    if not proveedor:
+        messages.error(request, "Proveedor no encontrado.")
+        return redirect("visualizar_proveedores")
+
+    nuevo_estado = (request.POST.get("estado") or "").strip()
+
+    if nuevo_estado not in ["Activo", "Inactivo"]:
+        messages.error(request, "Estado no válido.")
+        return redirect("visualizar_proveedores")
+
+    estado_anterior = proveedor.estado
+
+    if estado_anterior == nuevo_estado:
+        messages.info(request, "El proveedor ya tiene ese estado.")
+        return redirect("visualizar_proveedores")
+
+    proveedor.estado = nuevo_estado
+    proveedor.save(update_fields=["estado"])
+
+    detalle_historial = f"Estado: {estado_anterior} → {nuevo_estado}"
+
+    ProveedorHistorial.objects.create(
+        proveedor=proveedor,
+        accion="CAMBIO_ESTADO",
+        usuario=request.user,
+        detalle=detalle_historial
+    )
+
+    BitacoraUsuario.objects.create(
+        admin=request.user,
+        usuario=request.user,
+        accion="Cambio estado proveedor",
+        motivo=f"Proveedor ID {proveedor.pk} ({proveedor.nombre}): {estado_anterior} → {nuevo_estado}"
+    )
+
+    messages.success(request, "Estado del proveedor actualizado exitosamente.")
+    return redirect("visualizar_proveedores")

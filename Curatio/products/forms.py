@@ -18,6 +18,7 @@ class CrearMedicamentoForm(forms.ModelForm):
 
         # Por defecto, presentación vacía hasta que elijan forma
         self.fields["presentacion"].queryset = Presentacion.objects.none()
+        self.fields["proveedor"].queryset = Proveedor.objects.filter(estado="Activo").order_by("nombre")        
 
         if self.data and "forma" in self.data:
             try:
@@ -27,6 +28,8 @@ class CrearMedicamentoForm(forms.ModelForm):
                 pass
         elif self.instance.pk and self.instance.forma_id:
             self.fields["presentacion"].queryset = Presentacion.objects.filter(forma_id=self.instance.forma_id, activo=True).order_by("nombre")
+        
+        
 
     def clean_stock(self):
         stock = self.cleaned_data.get("stock")
@@ -61,6 +64,7 @@ class ActualizarMedicamentoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         self.fields["presentacion"].queryset = Presentacion.objects.none()
+        self.fields["proveedor"].queryset = Proveedor.objects.filter(estado="Activo").order_by("nombre")
 
         if self.data and "forma" in self.data:
             try:
@@ -94,4 +98,36 @@ class CrearProveedorForm(forms.ModelForm):
                 "Formato de NIT inválido. Ej: 12345678-9"
             )
 
-        return nit            
+        return nit
+
+class ActualizarProveedorForm(forms.ModelForm):
+
+    class Meta:
+        model = Proveedor
+        fields = [
+            "nombre",
+            "nombre_contacto",
+            "telefono_contacto",
+            "correo_contacto",
+            "direccion",
+            "ciudad",
+            "estado",
+        ]
+
+    def clean(self):
+        cleaned = super().clean()
+
+        campos_obligatorios = [
+            "nombre",
+            "nombre_contacto",
+            "telefono_contacto",
+            "correo_contacto",
+            "estado",
+        ]
+
+        for campo in campos_obligatorios:
+            valor = cleaned.get(campo)
+            if valor is None or str(valor).strip() == "":
+                raise forms.ValidationError(f"El campo {campo.replace('_', ' ')} es obligatorio.")
+
+        return cleaned            

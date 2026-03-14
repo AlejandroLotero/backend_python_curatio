@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Curatio | Editar proveedor{% endblock %}
+
+{% block content %}
+<h2 style="margin:0 0 12px;">Actualizar proveedor</h2>
+
+<div style="margin-bottom:16px; padding:12px 14px; border:1px solid var(--border); border-radius:14px; background: rgba(255,255,255,.04);">
+    <strong>Proveedor seleccionado:</strong> {{ proveedor.nombre }}<br>
+    <strong>NIT:</strong> {{ proveedor.nit }}<br>
+    <strong>Razón social:</strong> {{ proveedor.razon_social }}
+</div>
+
+<form method="post" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
+    {% csrf_token %}
+
+    {% for field in form %}
+        <div>
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+                <span style="color:var(--danger); font-size:0.85em;">{{ field.errors.0 }}</span>
+            {% endif %}
+        </div>
+    {% endfor %}
+
+    {% if form.non_field_errors %}
+        <div style="grid-column:1/-1; color:var(--danger);">
+            {{ form.non_field_errors }}
+        </div>
+    {% endif %}
+
+    <div style="grid-column:1/-1; display:flex; gap:10px; margin-top:8px;">
+        <button type="submit" class="btn primary">Guardar cambios</button>
+        <a href="{% url 'visualizar_proveedores' %}" class="btn">Cancelar</a>
+    </div>
+</form>
+{% endblock %}
