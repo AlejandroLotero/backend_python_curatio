@@ -1,25 +1,20 @@
-from django.shortcuts import render
-
-#Importación para editar medicamento 
-from .forms import CrearMedicamentoForm, ActualizarMedicamentoForm
-
-# Create your views here.
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-#para la paginación
 from django.core.paginator import Paginator
-#para exportar a excel y pdf
-from urllib.parse import urlparse
-#Creación de proveedor 
-from .forms import CrearProveedorForm, ActualizarProveedorForm
-from .models import Proveedor, ProveedorHistorial
 from django.db.models import Q
+from urllib.parse import urlparse
 from difflib import SequenceMatcher
 from django.utils import timezone
+from io import BytesIO
 
-from .forms import CrearMedicamentoForm
+from .forms import (
+    CrearMedicamentoForm,
+    ActualizarMedicamentoForm,
+    CrearProveedorForm,
+    ActualizarProveedorForm,
+)
 from .models import (
     Presentacion,
     MedicamentoHistorial,
@@ -27,15 +22,16 @@ from .models import (
     ViaAdministracion,
     Laboratorio,
     EstadoMedicamento,
+    Proveedor,
+    ProveedorHistorial,
 )
-#para el historial de medicamentos
 from accounts.models import BitacoraUsuario
-from io import BytesIO
 
 try:
     from openpyxl import Workbook
 except ImportError:
     Workbook = None
+
 try:
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
     from reportlab.lib import colors
@@ -43,8 +39,14 @@ try:
 except ImportError:
     SimpleDocTemplate = None
 
+
 # Tamaño de página según regla de negocio: si hay más de 50 registros, paginación
 PAGE_SIZE_MEDICAMENTOS = 50
+
+
+# =========================
+# CREAR MEDICAMENTO
+# =========================
 
 @login_required
 def crear_medicamento(request):
@@ -56,7 +58,8 @@ def crear_medicamento(request):
         if form.is_valid():
             med = form.save(commit=False)
             med.creado_por = request.user
-            med.requiere_formula = False  # oculto, default backend
+            med.requiere_formula = False
+            med.laboratorio_texto = med.laboratorio.nombre if med.laboratorio else None
             med.full_clean()
             med.save()
 
@@ -75,6 +78,10 @@ def crear_medicamento(request):
     return render(request, "products/crear_medicamento.html", {"form": form})
 
 
+# =========================
+# API PRESENTACIONES POR FORMA
+# =========================
+
 @login_required
 def presentaciones_por_forma(request):
     if request.user.rol != "Administrador":
@@ -92,11 +99,23 @@ def presentaciones_por_forma(request):
     return JsonResponse({"results": items})
 
 
+# =========================
+# QUERYSET BASE MEDICAMENTOS
+# =========================
+
 def _get_medicamentos_queryset(request):
-    """Queryset base de medicamentos con filtros opcionales (RFADMIN08)."""
+    """
+    Queryset base de medicamentos con filtros opcionales.
+    """
     qs = Medicamento.objects.select_related(
-        "forma", "presentacion", "via_administracion", "laboratorio",
-        "proveedor", "estado", "responsable", "creado_por"
+        "forma",
+        "presentacion",
+        "via_administracion",
+        "laboratorio",
+        "proveedor",
+        "estado",
+        "responsable",
+        "creado_por",
     ).order_by("nombre")
 
     via_id = (request.GET.get("via_administracion") or "").strip()
@@ -121,13 +140,12 @@ def _get_medicamentos_queryset(request):
     }
 
 
+# =========================
+# LISTAR MEDICAMENTOS
+# =========================
+
 @login_required
 def listar_medicamentos(request):
-    """
-    RFADMIN08 - Listar medicamentos.
-    Solo ADMIN. Filtros: Vía de administración, Laboratorio, Nombre, Estado.
-    Orden alfabético por defecto. Paginación de 50 registros.
-    """
     if request.user.rol != "Administrador":
         return redirect("login")
 
@@ -146,12 +164,12 @@ def listar_medicamentos(request):
     return render(request, "products/lista_medicamentos.html", context)
 
 
+# =========================
+# API LISTAR MEDICAMENTOS
+# =========================
+
 @login_required
 def api_listar_medicamentos(request):
-    """
-    API JSON para listado de medicamentos (tiempo real al aplicar filtros).
-    Solo ADMIN. Mismos filtros que listar_medicamentos. Paginación 50.
-    """
     if request.user.rol != "Administrador":
         return JsonResponse({"detail": "No autorizado"}, status=403)
 
@@ -163,6 +181,7 @@ def api_listar_medicamentos(request):
     resultados = []
     for m in page_obj:
         resultados.append({
+            "id_medicamento": m.id,
             "nombre": m.nombre,
             "forma": m.forma.nombre,
             "presentacion": m.presentacion.nombre,
@@ -176,13 +195,13 @@ def api_listar_medicamentos(request):
             "precio_compra": str(m.precio_compra),
             "precio_venta": str(m.precio_venta),
             "proveedor": m.proveedor.nombre,
+            "nit_proveedor": m.proveedor.nit,
             "requiere_formula": m.requiere_formula,
             "descripcion": m.descripcion,
             "estado": m.estado.nombre,
-            #para la regla de negocio de que solo se puede vender si el estado es Activo
             "puede_venderse": m.puede_venderse,
             "responsable": m.responsable.email if m.responsable else None,
-            "creado_por": m.creado_por.email,
+            "creado_por": m.creado_por.email if m.creado_por else None,
             "creado_en": m.creado_en.isoformat() if m.creado_en else None,
         })
 
@@ -194,14 +213,13 @@ def api_listar_medicamentos(request):
         "filtros": filtros,
     })
 
-#cambiar estado de medicamento
+
+# =========================
+# CAMBIAR ESTADO MEDICAMENTO
+# =========================
+
 @login_required
 def cambiar_estado_medicamento(request, pk):
-    """
-    Cambiar Estado Medicamento (RF). Solo ADMIN.
-    Entradas: medicamento (pk en URL), estado (id en POST).
-    Reglas: cambio registrado en MedicamentoHistorial y Bitácora.
-    """
     if request.user.rol != "Administrador":
         messages.error(request, "No tiene permisos para cambiar el estado de medicamentos.")
         return redirect("login")
@@ -231,7 +249,7 @@ def cambiar_estado_medicamento(request, pk):
         return redirect("listar_medicamentos")
 
     medicamento.estado = nuevo_estado
-    medicamento.save(update_fields=["estado"])
+    medicamento.save(update_fields=["estado", "actualizado_en"])
 
     detalle_historial = f"Estado: {estado_anterior} → {nuevo_estado.nombre}"
     MedicamentoHistorial.objects.create(
@@ -258,12 +276,16 @@ def cambiar_estado_medicamento(request, pk):
                 return redirect(referer)
         except Exception:
             pass
+
     return redirect("listar_medicamentos")
 
 
+# =========================
+# REPORTE MEDICAMENTOS
+# =========================
+
 @login_required
 def reporte_medicamentos(request):
-    """Exportar listado de medicamentos a Excel o PDF (mismos filtros que listar). Solo ADMIN."""
     if request.user.rol != "Administrador":
         return redirect("login")
 
@@ -279,25 +301,39 @@ def reporte_medicamentos(request):
         wb = Workbook()
         ws = wb.active
         ws.title = "Medicamentos"
+
         headers = [
             "Nombre", "Forma farmacéutica", "Presentación", "Concentración",
             "Vía administración", "Laboratorio", "Lote", "F. fabricación", "F. vencimiento",
-            "Stock", "Precio compra", "Precio venta", "Proveedor", "Requiere fórmula",
-            "Descripción", "Estado", "Responsable", "Creado por", "Creado en",
+            "Stock", "Precio compra", "Precio venta", "Proveedor", "NIT proveedor",
+            "Requiere fórmula", "Descripción", "Estado", "Responsable", "Creado por", "Creado en",
         ]
         ws.append(headers)
+
         for m in qs:
             ws.append([
-                m.nombre, m.forma.nombre, m.presentacion.nombre, m.concentracion,
-                m.via_administracion.nombre, m.laboratorio.nombre, m.lote,
+                m.nombre,
+                m.forma.nombre,
+                m.presentacion.nombre,
+                m.concentracion,
+                m.via_administracion.nombre,
+                m.laboratorio.nombre,
+                m.lote,
                 m.fecha_fabricacion.isoformat() if m.fecha_fabricacion else "",
                 m.fecha_vencimiento.isoformat() if m.fecha_vencimiento else "",
-                m.stock, m.precio_compra, m.precio_venta, m.proveedor.nombre,
-                "Sí" if m.requiere_formula else "No", m.descripcion, m.estado.nombre,
+                m.stock,
+                m.precio_compra,
+                m.precio_venta,
+                m.proveedor.nombre,
+                m.proveedor.nit,
+                "Sí" if m.requiere_formula else "No",
+                m.descripcion,
+                m.estado.nombre,
                 m.responsable.email if m.responsable else "",
-                m.creado_por.email,
+                m.creado_por.email if m.creado_por else "",
                 m.creado_en.strftime("%Y-%m-%d %H:%M") if m.creado_en else "",
             ])
+
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
@@ -308,10 +344,12 @@ def reporte_medicamentos(request):
     if formato == "pdf" and SimpleDocTemplate:
         buffer = BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=letter)
+
         data = [[
             "Nombre", "Forma", "Presentación", "Vía", "Laboratorio", "Lote",
             "F. Fab", "F. Venc", "Stock", "P. Compra", "P. Venta", "Estado",
         ]]
+
         for m in qs:
             data.append([
                 m.nombre[:20] if len(m.nombre) > 20 else m.nombre,
@@ -322,42 +360,50 @@ def reporte_medicamentos(request):
                 m.lote,
                 str(m.fecha_fabricacion) if m.fecha_fabricacion else "",
                 str(m.fecha_vencimiento) if m.fecha_vencimiento else "",
-                str(m.stock), str(m.precio_compra), str(m.precio_venta),
+                str(m.stock),
+                str(m.precio_compra),
+                str(m.precio_venta),
                 m.estado.nombre,
             ])
+
         table = Table(data, repeatRows=1)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
             ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
             ("FONTSIZE", (0, 0), (-1, -1), 7),
         ]))
+
         doc.build([table])
         buffer.seek(0)
+
         response = HttpResponse(buffer, content_type="application/pdf")
         response["Content-Disposition"] = 'attachment; filename="reporte_medicamentos.pdf"'
         return response
 
     return redirect("listar_medicamentos")
 
+
+# =========================
+# EDITAR MEDICAMENTO
+# =========================
+
 @login_required
 def editar_medicamento(request, pk):
-
     if request.user.rol != "Administrador":
         return redirect("login")
 
     medicamento = Medicamento.objects.filter(pk=pk).first()
-
     if not medicamento:
         messages.error(request, "Medicamento no encontrado.")
         return redirect("listar_medicamentos")
 
     if request.method == "POST":
-
         form = ActualizarMedicamentoForm(request.POST, instance=medicamento)
 
         if form.is_valid():
-
-            med = form.save()
+            med = form.save(commit=False)
+            med.laboratorio_texto = med.laboratorio.nombre if med.laboratorio else None
+            med.save()
 
             MedicamentoHistorial.objects.create(
                 medicamento=med,
@@ -367,9 +413,7 @@ def editar_medicamento(request, pk):
             )
 
             messages.success(request, "Medicamento actualizado correctamente.")
-
             return redirect("listar_medicamentos")
-
     else:
         form = ActualizarMedicamentoForm(instance=medicamento)
 
@@ -381,24 +425,24 @@ def editar_medicamento(request, pk):
             "medicamento": medicamento
         }
     )
+
+
+# =========================
+# CREAR PROVEEDOR
+# =========================
+
 @login_required
 def crear_proveedor(request):
-
     if request.user.rol != "Administrador":
         return redirect("login")
 
     if request.method == "POST":
-
         form = CrearProveedorForm(request.POST)
 
         if form.is_valid():
-
             proveedor = form.save(commit=False)
-
             proveedor.creado_por = request.user
-
             proveedor.full_clean()
-
             proveedor.save()
 
             ProveedorHistorial.objects.create(
@@ -409,11 +453,8 @@ def crear_proveedor(request):
             )
 
             messages.success(request, "Proveedor creado exitosamente")
-
             return redirect("crear_proveedor")
-
     else:
-
         form = CrearProveedorForm()
 
     return render(
@@ -422,14 +463,13 @@ def crear_proveedor(request):
         {"form": form}
     )
 
+
+# =========================
+# VISUALIZAR PROVEEDORES
+# =========================
+
 @login_required
 def visualizar_proveedores(request):
-    """
-    RFADMIN15 - Visualización de proveedores
-    Solo ADMIN. Permite consultar por NIT o nombre.
-    Vista de solo lectura, sin edición ni eliminación.
-    Si no encuentra coincidencia exacta, sugiere nombres parecidos.
-    """
     if request.user.rol != "Administrador":
         return redirect("login")
 
@@ -451,24 +491,20 @@ def visualizar_proveedores(request):
 
         proveedores = Proveedor.objects.filter(filtros).order_by("nombre")
 
-        # Si no hay resultados y se buscó por nombre, generar sugerencias
         if not proveedores.exists() and nombre:
             candidatos = Proveedor.objects.all().order_by("nombre")
-            sugeridos_ids = []
+            sugeridos_pks = []
 
             nombre_buscado = nombre.lower().strip()
 
             for proveedor in candidatos:
                 nombre_proveedor = (proveedor.nombre or "").lower().strip()
-
-                # Similaridad aproximada
                 ratio = SequenceMatcher(None, nombre_buscado, nombre_proveedor).ratio()
 
-                # Regla aproximada para "1 o 2 letras de diferencia"
                 if ratio >= 0.75:
-                    sugeridos_ids.append(proveedor.id)
+                    sugeridos_pks.append(proveedor.pk)
 
-            sugerencias = Proveedor.objects.filter(id__in=sugeridos_ids).order_by("nombre")
+            sugerencias = Proveedor.objects.filter(pk__in=sugeridos_pks).order_by("nombre")
 
         if not proveedores.exists() and not sugerencias.exists():
             messages.warning(request, "No se encontraron proveedores con los criterios ingresados.")
@@ -483,18 +519,17 @@ def visualizar_proveedores(request):
 
     return render(request, "suppliers/visualizar_proveedores.html", context)
 
+
+# =========================
+# EDITAR PROVEEDOR
+# =========================
+
 @login_required
 def editar_proveedor(request, pk):
-    """
-    RFADMIN16 - Actualizar proveedor
-    Solo ADMIN.
-    Permite editar campos autorizados del proveedor y registra el cambio en historial.
-    """
     if request.user.rol != "Administrador":
         return redirect("login")
 
     proveedor = Proveedor.objects.filter(pk=pk).first()
-
     if not proveedor:
         messages.error(request, "Proveedor no encontrado.")
         return redirect("visualizar_proveedores")
@@ -518,12 +553,11 @@ def editar_proveedor(request, pk):
                 admin=request.user,
                 usuario=request.user,
                 accion="Actualización de proveedor",
-                motivo=f"Proveedor ID {proveedor_actualizado.pk} ({proveedor_actualizado.nombre}) actualizado."
+                motivo=f"Proveedor {proveedor_actualizado.nit} ({proveedor_actualizado.nombre}) actualizado."
             )
 
             messages.success(request, "Proveedor actualizado exitosamente.")
             return redirect("visualizar_proveedores")
-
     else:
         form = ActualizarProveedorForm(instance=proveedor)
 
@@ -537,13 +571,12 @@ def editar_proveedor(request, pk):
     )
 
 
+# =========================
+# CAMBIAR ESTADO PROVEEDOR
+# =========================
+
 @login_required
 def cambiar_estado_proveedor(request, pk):
-    """
-    RFADMIN17 - Habilitar/Deshabilitar proveedor
-    Solo ADMIN.
-    Cambia el estado Activo/Inactivo y registra el cambio en historial y bitácora.
-    """
     if request.user.rol != "Administrador":
         messages.error(request, "No tiene permisos para cambiar el estado del proveedor.")
         return redirect("login")
@@ -553,25 +586,22 @@ def cambiar_estado_proveedor(request, pk):
         return redirect("visualizar_proveedores")
 
     proveedor = Proveedor.objects.filter(pk=pk).first()
-
     if not proveedor:
         messages.error(request, "Proveedor no encontrado.")
         return redirect("visualizar_proveedores")
 
     nuevo_estado = (request.POST.get("estado") or "").strip()
-
     if nuevo_estado not in ["Activo", "Inactivo"]:
         messages.error(request, "Estado no válido.")
         return redirect("visualizar_proveedores")
 
     estado_anterior = proveedor.estado
-
     if estado_anterior == nuevo_estado:
         messages.info(request, "El proveedor ya tiene ese estado.")
         return redirect("visualizar_proveedores")
 
     proveedor.estado = nuevo_estado
-    proveedor.save(update_fields=["estado"])
+    proveedor.save(update_fields=["estado", "actualizado_en"])
 
     detalle_historial = f"Estado: {estado_anterior} → {nuevo_estado}"
 
@@ -586,7 +616,7 @@ def cambiar_estado_proveedor(request, pk):
         admin=request.user,
         usuario=request.user,
         accion="Cambio estado proveedor",
-        motivo=f"Proveedor ID {proveedor.pk} ({proveedor.nombre}): {estado_anterior} → {nuevo_estado}"
+        motivo=f"Proveedor {proveedor.nit} ({proveedor.nombre}): {estado_anterior} → {nuevo_estado}"
     )
 
     messages.success(request, "Estado del proveedor actualizado exitosamente.")
