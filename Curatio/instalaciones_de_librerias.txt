@@ -5,4 +5,4 @@ pip install django-environ
 pip install djangorestframework
 python -m pip install Pillow
 pip install reportlab
-pip install openpyxl 
+pip install openpyxl

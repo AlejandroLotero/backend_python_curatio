@@ -25,7 +25,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env()
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
-#SE CAMBIO SMTP POR CONSOLE PARA VER LOS CORREOS EN LA CONSOLA, SE DEBE CAMBIAR A SMTP PARA EL ENVIO REAL DE CORREOS
+# SE CAMBIO SMTP POR CONSOLE PARA VER LOS CORREOS EN LA CONSOLA, SE DEBE CAMBIAR A SMTP PARA EL ENVIO REAL DE CORREOS
+# RFADMIN20 / seguridad: en producción use HTTPS para el sitio y SMTP con TLS (EMAIL_USE_TLS) para notificaciones.
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 EMAIL_HOST = env('EMAIL_HOST')
 EMAIL_PORT = env('EMAIL_PORT')
@@ -67,6 +68,7 @@ INSTALLED_APPS = [
     'accounts', 
     'rest_framework',
     'products',
+    'sales',
 ]
 
 MIDDLEWARE = [
@@ -106,10 +108,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'curatio',
-        'USER': 'root',
-        'PASSWORD': 'admin',
+        'USER': 'admin',
+        'PASSWORD': 'Admin123!',
         'HOST': 'localhost',
-        'PORT': '3306',
+        'PORT': '3307',
     }
 }
 
