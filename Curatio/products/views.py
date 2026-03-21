@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from difflib import SequenceMatcher
 from django.utils import timezone
 from io import BytesIO
+from django.views.decorators.cache import never_cache
 
 from .forms import (
     CrearMedicamentoForm,
@@ -49,6 +50,7 @@ PAGE_SIZE_MEDICAMENTOS = 50
 # =========================
 
 @login_required
+@never_cache
 def crear_medicamento(request):
     if request.user.rol != "Administrador":
         return redirect("login")
@@ -83,6 +85,7 @@ def crear_medicamento(request):
 # =========================
 
 @login_required
+@never_cache
 def presentaciones_por_forma(request):
     if request.user.rol != "Administrador":
         return JsonResponse({"detail": "No autorizado"}, status=403)
@@ -145,6 +148,7 @@ def _get_medicamentos_queryset(request):
 # =========================
 
 @login_required
+@never_cache
 def listar_medicamentos(request):
     if request.user.rol != "Administrador":
         return redirect("login")
@@ -169,6 +173,7 @@ def listar_medicamentos(request):
 # =========================
 
 @login_required
+@never_cache
 def api_listar_medicamentos(request):
     if request.user.rol != "Administrador":
         return JsonResponse({"detail": "No autorizado"}, status=403)
@@ -219,6 +224,7 @@ def api_listar_medicamentos(request):
 # =========================
 
 @login_required
+@never_cache
 def cambiar_estado_medicamento(request, pk):
     if request.user.rol != "Administrador":
         messages.error(request, "No tiene permisos para cambiar el estado de medicamentos.")
@@ -285,6 +291,7 @@ def cambiar_estado_medicamento(request, pk):
 # =========================
 
 @login_required
+@never_cache
 def reporte_medicamentos(request):
     if request.user.rol != "Administrador":
         return redirect("login")
@@ -388,6 +395,7 @@ def reporte_medicamentos(request):
 # =========================
 
 @login_required
+@never_cache
 def editar_medicamento(request, pk):
     if request.user.rol != "Administrador":
         return redirect("login")
@@ -432,6 +440,7 @@ def editar_medicamento(request, pk):
 # =========================
 
 @login_required
+@never_cache
 def crear_proveedor(request):
     if request.user.rol != "Administrador":
         return redirect("login")
@@ -469,6 +478,7 @@ def crear_proveedor(request):
 # =========================
 
 @login_required
+@never_cache
 def visualizar_proveedores(request):
     if request.user.rol != "Administrador":
         return redirect("login")
@@ -525,6 +535,7 @@ def visualizar_proveedores(request):
 # =========================
 
 @login_required
+@never_cache
 def editar_proveedor(request, pk):
     if request.user.rol != "Administrador":
         return redirect("login")
@@ -576,6 +587,7 @@ def editar_proveedor(request, pk):
 # =========================
 
 @login_required
+@never_cache
 def cambiar_estado_proveedor(request, pk):
     if request.user.rol != "Administrador":
         messages.error(request, "No tiene permisos para cambiar el estado del proveedor.")

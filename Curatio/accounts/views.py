@@ -5,6 +5,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpResponse
 from django.contrib import messages
+from django.views.decorators.cache import never_cache
 
 from openpyxl import Workbook
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
@@ -22,6 +23,7 @@ from .utils import generar_password
 # =========================
 
 @login_required
+@never_cache
 def dashboard(request):
     """
     Dashboard principal del sistema.
@@ -35,6 +37,7 @@ def dashboard(request):
 # =========================
 
 @login_required
+@never_cache
 def crear_usuario(request):
     """
     RQ creación de usuario.
@@ -91,6 +94,7 @@ def crear_usuario(request):
 # =========================
 
 @login_required
+@never_cache
 def ver_usuario(request, user_id=None):
     """
     Visualizar cuenta de usuario.
@@ -110,6 +114,7 @@ def ver_usuario(request, user_id=None):
 # =========================
 
 @login_required
+@never_cache
 def cambiar_estado_usuario(request, user_id):
     """
     Activar / desactivar usuario.
@@ -149,6 +154,7 @@ def cambiar_estado_usuario(request, user_id):
 # =========================
 
 @login_required
+@never_cache
 def lista_usuarios(request):
     """
     RFADMIN06 - Listar usuarios
@@ -207,6 +213,7 @@ def lista_usuarios(request):
 # =========================
 
 @login_required
+@never_cache
 def generar_reporte_usuarios(request):
     """
     Exportar usuarios en Excel o PDF.
