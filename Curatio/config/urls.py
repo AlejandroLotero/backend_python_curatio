@@ -28,13 +28,11 @@ from django.conf.urls.static import static
 
 
 urlpatterns = [
-    
-
-    path('admin-panel/', admin.site.urls), # El admin suele ir aquí
-    path('', include('accounts.urls')),    # Dejamos accounts en la raíz o bajo 'accounts/'
+    path('admin-panel/', admin.site.urls),
+    # Ventas antes del include con '' para que no quede oculto tras accounts.
+    path('ventas/', include('sales.urls')),
+    path('', include('accounts.urls')),
     path('products/', include('products.urls')),
-   
-   
 ]
 
 if settings.DEBUG:
