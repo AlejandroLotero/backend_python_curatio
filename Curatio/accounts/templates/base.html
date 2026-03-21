@@ -202,7 +202,27 @@
 
       {% if user.is_authenticated %}
         {# Si luego agregas logout real, esta ruta cambia. Ver nota abajo #}
-        <a href="{% url 'logout' %}" style="color:var(--danger);">Cerrar sesión</a>
+        <form method="post" action="{% url 'logout' %}" style="margin:6px 6px;">
+          {% csrf_token %}
+          <button
+            type="submit"
+            style="
+              display:flex;
+              align-items:center;
+              gap:10px;
+              width:100%;
+              padding:10px 10px;
+              border-radius:12px;
+              color:var(--danger);
+              border:1px solid transparent;
+              background:transparent;
+              cursor:pointer;
+              text-align:left;
+            "
+          >
+            Cerrar sesión
+          </button>
+        </form>
        
       {% else %}
         <a href="{% url 'login' %}">
