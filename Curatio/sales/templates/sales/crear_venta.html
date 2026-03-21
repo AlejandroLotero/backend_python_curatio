@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Curatio | Crear venta{% endblock %}
+
+{% block content %}
+<h2 style="margin:0 0 12px;">Crear venta (RFADMIN20)</h2>
+<p style="margin:0 0 14px; color: rgba(147,164,199,1); font-size:14px;">
+  La venta queda registrada en estado «Pendiente de confirmación». Se enviará un correo al cliente con el detalle
+  (Configurar SMTP para lo de los correos).
+</p>
+
+<form method="post" id="form-venta" style="display:grid; gap:14px;">
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="msg error">{{ form.non_field_errors }}</div>
+  {% endif %}
+  {% if formset.non_form_errors %}
+    <div class="msg error">{{ formset.non_form_errors }}</div>
+  {% endif %}
+
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+    <div>
+      <label>Número de factura</label>
+      {{ form.numero_factura }}
+      {% if form.numero_factura.errors %}<div class="msg error" style="margin-top:6px;">{{ form.numero_factura.errors }}</div>{% endif %}
+    </div>
+    <div>
+      <label>Cliente</label>
+      {{ form.cliente }}
+      {% if form.cliente.errors %}<div class="msg error" style="margin-top:6px;">{{ form.cliente.errors }}</div>{% endif %}
+    </div>
+    <div>
+      <label>Tipo de pago</label>
+      {{ form.tipo_pago }}
+    </div>
+    <div>
+      <label>Subtotal (debe coincidir con las líneas)</label>
+      {{ form.subtotal }}
+    </div>
+    <div>
+      <label>IVA</label>
+      {{ form.iva }}
+    </div>
+    <div>
+      <label>Descuento</label>
+      {{ form.descuento }}
+    </div>
+    <div>
+      <label>Total (subtotal + IVA − descuento)</label>
+      {{ form.total }}
+    </div>
+  </div>
+
+  <div style="border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:12px;">
+    <b style="display:block; margin-bottom:10px;">Medicamentos</b>
+    {{ formset.management_form }}
+    {% for f in formset.forms %}
+      <div class="linea-venta" style="display:grid; grid-template-columns: 2fr 1fr auto; gap:10px; align-items:end; margin-bottom:10px;">
+        <div>
+          <label>Medicamento</label>
+          {{ f.medicamento }}
+          {% if f.medicamento.errors %}<div class="msg error" style="margin-top:6px;">{{ f.medicamento.errors }}</div>{% endif %}
+        </div>
+        <div>
+          <label>Cantidad</label>
+          {{ f.cantidad }}
+          {% if f.cantidad.errors %}<div class="msg error" style="margin-top:6px;">{{ f.cantidad.errors }}</div>{% endif %}
+        </div>
+        <div style="padding-bottom:4px;">
+          {% if f.DELETE %}<label style="display:flex; gap:6px; align-items:center; font-size:13px;">Eliminar {{ f.DELETE }}</label>{% endif %}
+        </div>
+        {% for hidden in f.hidden_fields %}{{ hidden }}{% endfor %}
+      </div>
+      {% if f.non_field_errors %}
+        <div class="msg error">{{ f.non_field_errors }}</div>
+      {% endif %}
+    {% endfor %}
+    <p style="font-size:12px; color: rgba(147,164,199,1); margin:8px 0 0;">
+      Solo se listan medicamentos activos con stock disponible. El precio unitario se toma del precio de venta al guardar.
+    </p>
+  </div>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <button type="button" class="btn" id="btn-calcular">Recalcular subtotal y total</button>
+    <button type="submit" class="btn primary">Guardar venta</button>
+    <a class="btn" href="{% url 'dashboard' %}">Volver al panel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function(){
+  const PRECIOS = JSON.parse('{{ precios_medicamentos_json|escapejs }}');
+  function parseDec(el){
+    if(!el || !el.value) return 0;
+    const n = parseFloat(String(el.value).replace(',','.'));
+    return isNaN(n) ? 0 : n;
+  }
+  function setVal(el, v){
+    if(!el) return;
+    el.value = (Math.round(v * 100) / 100).toFixed(2);
+  }
+  function subtotalLineas(){
+    let s = 0;
+    document.querySelectorAll('.linea-venta').forEach(function(row){
+      const sel = row.querySelector('select[name$="-medicamento"]');
+      const qty = row.querySelector('input[name$="-cantidad"]');
+      const del = row.querySelector('input[name$="-DELETE"]');
+      if(del && del.checked) return;
+      const id = sel && sel.value;
+      const p = id && PRECIOS[id] ? parseFloat(PRECIOS[id]) : 0;
+      const q = qty ? parseInt(qty.value,10) || 0 : 0;
+      s += p * q;
+    });
+    return Math.round(s * 100) / 100;
+  }
+  function recalc(){
+    const sub = document.querySelector('[name="subtotal"]');
+    const iva = document.querySelector('[name="iva"]');
+    const desc = document.querySelector('[name="descuento"]');
+    const tot = document.querySelector('[name="total"]');
+    const s = subtotalLineas();
+    setVal(sub, s);
+    const t = s + parseDec(iva) - parseDec(desc);
+    setVal(tot, t);
+  }
+  document.getElementById('btn-calcular').addEventListener('click', recalc);
+  document.getElementById('form-venta').addEventListener('change', function(e){
+    if(e.target && e.target.matches('select[name$="-medicamento"], input[name$="-cantidad"], input[name$="-DELETE"]')){
+      recalc();
+    }
+  });
+})();
+</script>
+{% endblock %}

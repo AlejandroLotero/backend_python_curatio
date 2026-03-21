@@ -188,6 +188,13 @@
         </a>
       {% endif %}
 
+      {% if user.is_authenticated %}
+        {% if user.rol == "Administrador" or user.rol == "Farmaceuta" %}
+        <div class="nav-section">Ventas</div>
+        <a href="{% url 'crear_venta' %}">Crear venta</a>
+        {% endif %}
+      {% endif %}
+
       {% if user.is_authenticated and user.rol == "Administrador" %}
         <div class="nav-section">Inventario</div>
         <a href="{% url 'listar_medicamentos' %}">Listar medicamentos <span class="pill">ADMIN</span></a>
@@ -254,6 +261,11 @@
           <a class="btn" href="{% url 'crear_medicamento' %}">Crear medicamento</a>
           <a class="btn" href="{% url 'crear_proveedor' %}">Crear proveedor</a>
           <a class="btn" href="{% url 'visualizar_proveedores' %}">Proveedores</a>
+        {% endif %}
+        {% if user.is_authenticated %}
+          {% if user.rol == "Administrador" or user.rol == "Farmaceuta" %}
+          <a class="btn primary" href="{% url 'crear_venta' %}">Crear venta</a>
+          {% endif %}
         {% endif %}
         {% if user.is_authenticated %}
           <a class="btn" href="{% url 'mi_perfil' %}">Perfil</a>
