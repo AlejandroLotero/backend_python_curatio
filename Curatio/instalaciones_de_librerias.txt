@@ -6,3 +6,6 @@ pip install djangorestframework
 python -m pip install Pillow
 pip install reportlab
 pip install openpyxl
+python -m pip install django-cors-headers
+pip install mysqlclient
+

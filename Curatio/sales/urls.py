@@ -16,4 +16,5 @@ urlpatterns = [
         name="confirmar_pago_cliente",
     ),
     path("<int:pk>/anular/", views.anular_venta, name="anular_venta"),
+    path("ventas/", views.listar_ventas, name="listar_ventas"),
 ]
