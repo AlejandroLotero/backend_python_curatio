@@ -3,6 +3,11 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from accounts.api_user_views import (
+    users_resource,
+    user_detail_resource,
+    user_status_resource,
+)
 from accounts.api_identity_views import csrf_token_view, session_resource_view
 
 urlpatterns = [
@@ -10,6 +15,10 @@ urlpatterns = [
 
     path("v1/identity/csrf-token/", csrf_token_view, name="identity_csrf_token"),
     path("v1/identity/session/", session_resource_view, name="identity_session"),
+
+    path("v1/people/users/", users_resource, name="users_resource"),
+    path("v1/people/users/<int:user_id>/", user_detail_resource, name="user_detail_resource"),
+    path("v1/people/users/<int:user_id>/status/", user_status_resource, name="user_status_resource"),
 
     path("", include("accounts.urls")),
     path("", include("products.urls")),
