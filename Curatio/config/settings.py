@@ -83,6 +83,7 @@ INSTALLED_APPS = [
 
     "accounts",
     "products",
+    "sales",
 ]
 
 # =========================

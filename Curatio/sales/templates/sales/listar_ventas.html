@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Curatio | Listar ventas{% endblock %}
+
+{% block content %}
+<h2 style="margin:0 0 12px;">Reporte y listado de ventas</h2>
+<p style="margin:0 0 14px; color: rgba(147,164,199,1); font-size:14px;">
+  Puedes filtrar ventas y exportar el resultado en Excel o PDF.
+</p>
+
+<form method="get" style="display:grid; gap:12px; margin-bottom:14px;">
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:10px;">
+    <div>
+      <label for="id_numero_factura">Número de factura</label>
+      <input id="id_numero_factura" type="text" name="numero_factura" value="{{ filtros.numero_factura }}"
+             style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:var(--text);">
+    </div>
+    <div>
+      <label for="id_fecha">Fecha exacta</label>
+      <input id="id_fecha" type="date" name="fecha" value="{{ filtros.fecha }}"
+             style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:var(--text);">
+    </div>
+    <div>
+      <label for="id_fecha_desde">Fecha desde</label>
+      <input id="id_fecha_desde" type="date" name="fecha_desde" value="{{ filtros.fecha_desde }}"
+             style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:var(--text);">
+    </div>
+    <div>
+      <label for="id_fecha_hasta">Fecha hasta</label>
+      <input id="id_fecha_hasta" type="date" name="fecha_hasta" value="{{ filtros.fecha_hasta }}"
+             style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:var(--text);">
+    </div>
+    <div>
+      <label for="id_cliente">Cliente</label>
+      <input id="id_cliente" type="text" name="cliente" value="{{ filtros.cliente }}"
+             style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:var(--text);">
+    </div>
+    <div>
+      <label for="id_farmaceuta">Farmaceuta</label>
+      <input id="id_farmaceuta" type="text" name="farmaceuta" value="{{ filtros.farmaceuta }}"
+             style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:var(--text);">
+    </div>
+    <div>
+      <label for="id_estado">Estado de la venta</label>
+      <select id="id_estado" name="estado"
+              style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:var(--text);">
+        <option value="">Todos</option>
+        {% for value, label in estados_venta %}
+          <option value="{{ value }}" {% if filtros.estado == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="id_formato">Formato de exportación</label>
+      <select id="id_formato" name="formato"
+              style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.04); color:var(--text);">
+        <option value="excel">Excel</option>
+        <option value="pdf">PDF</option>
+      </select>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <button type="submit" class="btn primary">Aplicar filtros</button>
+    <button type="submit" class="btn" name="exportar" value="1">Generar reporte</button>
+    <a href="{% url 'listar_ventas' %}" class="btn">Limpiar</a>
+    <a href="{% url 'crear_venta' %}" class="btn">Nueva venta</a>
+  </div>
+</form>
+
+{% if ventas %}
+  <div style="overflow-x:auto;">
+    <table style="width:100%; border-collapse: collapse; min-width: 1000px;">
+      <thead>
+        <tr style="border-bottom:1px solid rgba(255,255,255,.16);">
+          <th style="text-align:left; padding:10px;">Factura</th>
+          <th style="text-align:left; padding:10px;">Fecha/Hora</th>
+          <th style="text-align:left; padding:10px;">Cliente</th>
+          <th style="text-align:left; padding:10px;">Farmaceuta</th>
+          <th style="text-align:left; padding:10px;">Tipo pago</th>
+          <th style="text-align:left; padding:10px;">Aprobador</th>
+          <th style="text-align:left; padding:10px;">Estado</th>
+          <th style="text-align:right; padding:10px;">Total</th>
+          <th style="text-align:left; padding:10px;">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for venta in ventas %}
+          <tr style="border-bottom:1px solid rgba(255,255,255,.08);">
+            <td style="padding:10px;">{{ venta.numero_factura }}</td>
+            <td style="padding:10px;">{{ venta.fecha_hora|date:"Y-m-d H:i" }}</td>
+            <td style="padding:10px;">{{ venta.cliente.nombre }}</td>
+            <td style="padding:10px;">{{ venta.vendedor.nombre }}</td>
+            <td style="padding:10px;">{{ venta.get_tipo_pago_display }}</td>
+            <td style="padding:10px;">
+              {% if venta.confirmacion_vendedor_por %}
+                {{ venta.confirmacion_vendedor_por.nombre }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td style="padding:10px;">{{ venta.get_estado_display }}</td>
+            <td style="padding:10px; text-align:right;">${{ venta.total }}</td>
+            <td style="padding:10px;">
+              <a class="btn" href="{% url 'detalle_venta' venta.id %}">Ver detalle</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="msg warning" style="margin-top:10px;">
+    No se encontraron ventas con los filtros aplicados.
+  </div>
+{% endif %}
+{% endblock %}
