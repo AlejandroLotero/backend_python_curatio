@@ -51,7 +51,7 @@ FRONTEND_BASE_URL = env(
     "FRONTEND_BASE_URL",
     default="http://localhost:5173"
 )
-# Tiempo de vida del token de restablecimiento (segundos)
+# Tiempo de vida del token de restablecimiento (segundos)q
 DJANGO_PASSWORD_RESET_TIMEOUT = env("PASSWORD_RESET_TIMEOUT")
 # Django usa esta variable para expirar el token de password reset
 PASSWORD_RESET_TIMEOUT = DJANGO_PASSWORD_RESET_TIMEOUT

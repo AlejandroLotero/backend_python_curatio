@@ -43,7 +43,7 @@ urlpatterns = [
         name="password_recovery_confirm",
     ),
 
-    # =========================
+    # ============================
     # USERS
     # =========================
     path("v1/people/users/", users_resource, name="users_resource"),
