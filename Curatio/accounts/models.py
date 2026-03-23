@@ -100,7 +100,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     fecha_fin = models.DateField(null=True, blank=True)
 
     email = models.EmailField(unique=True)
-
+    email_confirmed = models.BooleanField(default=True)
     telefono = models.CharField(max_length=15)
 
     telefono_secundario = models.CharField(
