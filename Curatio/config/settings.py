@@ -8,12 +8,14 @@ import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+#Para manejar tiempos de inactividad, correo el token
 env = environ.Env(
     DEBUG=(bool, False),
     EMAIL_PORT=(int, 587),
     EMAIL_USE_TLS=(bool, True),
     SESSION_COOKIE_AGE=(int, 1800),  # 30 min
     SESSION_INACTIVITY_TIMEOUT=(int, 900),  # 15 min
+    PASSWORD_RESET_TIMEOUT=(int, 3600),  # 1 hora
 )
 environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
 
@@ -41,6 +43,18 @@ DEFAULT_FROM_EMAIL = env(
     "DEFAULT_FROM_EMAIL",
     default=f"Curatio Admin <{EMAIL_HOST_USER or 'no-reply@curatio.local'}>"
 )
+
+# =========================
+# FRONTEND / PASSWORD RESET
+# =========================
+FRONTEND_BASE_URL = env(
+    "FRONTEND_BASE_URL",
+    default="http://localhost:5173"
+)
+# Tiempo de vida del token de restablecimiento (segundos)
+DJANGO_PASSWORD_RESET_TIMEOUT = env("PASSWORD_RESET_TIMEOUT")
+# Django usa esta variable para expirar el token de password reset
+PASSWORD_RESET_TIMEOUT = DJANGO_PASSWORD_RESET_TIMEOUT
 
 # =========================
 # MEDIA

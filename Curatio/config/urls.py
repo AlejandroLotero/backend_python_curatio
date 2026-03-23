@@ -8,16 +8,47 @@ from accounts.api_user_views import (
     user_detail_resource,
     user_status_resource,
 )
-from accounts.api_identity_views import csrf_token_view, session_resource_view
+from accounts.api_identity_views import (
+    csrf_token_view,
+    session_resource_view,
+    password_recovery_request_view,
+    password_recovery_validate_view,
+    password_recovery_confirm_view,
+)
 
 urlpatterns = [
     path("admin-panel/", admin.site.urls),
 
+    # =========================
+    # IDENTITY / SESSION
+    # =========================
     path("v1/identity/csrf-token/", csrf_token_view, name="identity_csrf_token"),
     path("v1/identity/session/", session_resource_view, name="identity_session"),
 
+    # =========================
+    # PASSWORD RECOVERY
+    # =========================
+    path("v1/identity/password-recovery/",
+        password_recovery_request_view,
+        name="password_recovery_request",
+    ),
+    path(
+        "v1/identity/password-recovery/validate/",
+        password_recovery_validate_view,
+        name="password_recovery_validate",
+    ),
+    path(
+        "v1/identity/password-recovery/confirm/",
+        password_recovery_confirm_view,
+        name="password_recovery_confirm",
+    ),
+
+    # =========================
+    # USERS
+    # =========================
     path("v1/people/users/", users_resource, name="users_resource"),
     path("v1/people/users/<int:user_id>/", user_detail_resource, name="user_detail_resource"),
+    path("v1/people/users/<int:user_id>/status/", user_status_resource, name="user_status_resource"),    
     path("v1/people/users/<int:user_id>/status/", user_status_resource, name="user_status_resource"),
 
     path("", include("accounts.urls")),
