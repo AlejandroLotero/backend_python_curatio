@@ -192,6 +192,8 @@
         {% if user.rol == "Administrador" or user.rol == "Farmaceuta" %}
         <div class="nav-section">Ventas</div>
         <a href="{% url 'crear_venta' %}">Crear venta</a>
+        <a href="{% url 'listar_ventas' %}">Listar ventas</a>
+
         {% endif %}
       {% endif %}
 
