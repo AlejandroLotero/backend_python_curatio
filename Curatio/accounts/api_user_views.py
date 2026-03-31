@@ -12,6 +12,7 @@ from rest_framework import status
 from .models import User, BitacoraUsuario
 from .forms import CrearUsuarioForm, EditarUsuarioAdminForm
 from .utils import generar_password
+from .user_serializers import serialize_user_for_profile # Serialización de usuarios para respuestas API (perfil, sesión, listados).
 
 
 def _request_has_field(request, *names):
@@ -129,28 +130,22 @@ def _is_admin(user):
     """
     return getattr(user, "rol", None) == "Administrador"
 
-
-def _serialize_user(user):
+# Metadatos para pantalla de perfil (solo lectura + enlace opcional a edición).
+# Solo ADMIN puede editar vía API PATCH existente.
+# Se modifico la funcion user_serializers (nuevo archivo user_serializers.py) por serialize_user_for_profile para que se pueda usar en la respuesta de la API dependiendo del rol del usuario.
+def _profile_response_meta(viewer, target_user):
     """
-    Serializa un usuario al formato esperado por el frontend.
+    Metadatos para pantalla de perfil (solo lectura + enlace opcional a edición).
+    Solo ADMIN puede editar vía API PATCH existente.
     """
+    can_edit = _is_admin(viewer) # Verifica si el usuario autenticado tiene rol de administrador y si es asi, puede editar el perfil del usuario objetivo.
     return {
-        "id": user.id,
-        "name": user.nombre,
-        "email": user.email,
-        "role": user.rol,
-        "is_active": user.estado,
-        "email_confirmed": getattr(user, "email_confirmed", True),
-        "document_type": user.tipo_documento,
-        "document_number": user.numero_documento,
-        "phone": user.telefono,
-        "secondary_phone": user.telefono_secundario,
-        "address": user.direccion,
-        "photo": user.foto.url if user.foto else None,
-        "start_date": user.fecha_inicio.isoformat() if user.fecha_inicio else None,
-        "end_date": user.fecha_fin.isoformat() if user.fecha_fin else None,
-        "created_at": user.creado_en.isoformat() if user.creado_en else None,
-        "updated_at": user.actualizado_en.isoformat() if user.actualizado_en else None,
+        "read_only": True,
+        "can_edit_account": can_edit,
+        # Ruta relativa para el front (PATCH); None si el rol no puede editar.
+        "edit_account_path": (
+            f"/v1/people/users/{target_user.id}/" if can_edit else None
+        ),
     }
 
 
@@ -265,7 +260,10 @@ def users_resource(request):
 
         return Response({
             "data": {
-                "results": [_serialize_user(item) for item in page_obj],
+                "results": [
+                    serialize_user_for_profile(item, viewer_is_admin=True)
+                    for item in page_obj
+                ],
                 "pagination": {
                     "count": paginator.count,
                     "num_pages": paginator.num_pages,
@@ -350,11 +348,33 @@ def users_resource(request):
     return Response(
         {
             "data": {
-                "user": _serialize_user(user)
+                "user": serialize_user_for_profile(user, viewer_is_admin=True)
             },
             "message": "User created successfully."
         },
         status=status.HTTP_201_CREATED,
+    )
+
+# Perfil del usuario en sesión (mismo contrato que GET /users/<id>/ cuando id es el propio).
+# Útil para la página de perfil sin conocer el id por delante (FFARMA02).
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def user_me_profile_resource(request):
+    """
+    Perfil del usuario en sesión (mismo contrato que GET /users/<id>/ cuando id es el propio).
+    Útil para la página de perfil sin conocer el id por delante (FFARMA02).
+    """
+    u = request.user
+    payload = serialize_user_for_profile(u, viewer_is_admin=_is_admin(u))
+    return Response(
+        {
+            "data": {
+                "user": payload,
+                "meta": _profile_response_meta(request.user, u),
+            },
+            "message": "User retrieved successfully.",
+        },
+        status=status.HTTP_200_OK,
     )
 
 
@@ -370,12 +390,19 @@ def user_detail_resource(request, user_id):
     justificación visible al pasar a Inactivo; registra bitácora.
     """
     target_user = get_object_or_404(User, pk=user_id)
-
+# GET: administrador o el mismo usuario dueño del perfil.
+# PATCH/PUT (RFADMIN04): solo ADMIN. Actualiza datos de la cuenta; requiere
+# justificación visible al pasar a Inactivo; registra bitácora.
     if request.method == "GET":
         if _is_admin(request.user) or request.user.id == target_user.id:
+            viewer_admin = _is_admin(request.user)
             return Response({
                 "data": {
-                    "user": _serialize_user(target_user)
+                    "user": serialize_user_for_profile(
+                        target_user,
+                        viewer_is_admin=viewer_admin,
+                    ),
+                    "meta": _profile_response_meta(request.user, target_user),
                 },
                 "message": "User retrieved successfully."
             })
@@ -502,7 +529,7 @@ def user_detail_resource(request, user_id):
     return Response(
         {
             "data": {
-                "user": _serialize_user(user)
+                "user": serialize_user_for_profile(user, viewer_is_admin=True)
             },
             "message": "Cuenta actualizada exitosamente",
         },
@@ -576,7 +603,7 @@ def user_status_resource(request, user_id):
 
     return Response({
         "data": {
-            "user": _serialize_user(target_user)
+            "user": serialize_user_for_profile(target_user, viewer_is_admin=True)
         },
         "message": "User status updated successfully."
     })
