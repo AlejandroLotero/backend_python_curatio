@@ -3,27 +3,53 @@
 
 <h2>Gestión de usuarios</h2>
 
+<!-- # Mensaje de confirmación: Cuenta actualizada exitosamente Jhonier-->
+{% if messages %}
+  {% for message in messages %}
+    <div style="padding:10px; margin-bottom:10px; border:1px solid #ccc; background:#e6ffe6;">
+      {{ message }}
+    </div>
+  {% endfor %}
+{% endif %}
+
 <form method="get" style="margin-bottom: 1rem;">
-  <input type="text" name="nombre" placeholder="Nombre" value="{{ nombre }}"/>
+   <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
 
-  <select name="rol">
-    <option value="">-- Rol --</option>
-    {% for value,label in roles %}
-      <option value="{{ value }}" {% if rol == value %}selected{% endif %}>{{ label }}</option>
-    {% endfor %}
-  </select>
+    <input type="text" name="nombre" placeholder="Nombre" value="{{ nombre }}"/>
 
-  <select name="estado">
-    <option value="">-- Estado --</option>
-    <option value="1" {% if estado == "1" or estado == "true" or estado == "True" %}selected{% endif %}>Activo</option>
-    <option value="0" {% if estado == "0" or estado == "false" or estado == "False" %}selected{% endif %}>Inactivo</option>
-  </select>
+    <select name="rol">
+      <option value="">-- Rol --</option>
+      {% for value,label in roles %}
+        <option value="{{ value }}" {% if rol == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
 
-  <input type="text" name="documento" placeholder="Documento (tipo o número)" value="{{ documento }}"/>
+    <select name="estado">
+      <option value="">-- Estado --</option>
+      <option value="1" {% if estado == "1" or estado == "true" or estado == "True" %}selected{% endif %}>Activo</option>
+      <option value="0" {% if estado == "0" or estado == "false" or estado == "False" %}selected{% endif %}>Inactivo</option>
+    </select>
 
-  <button type="submit">Filtrar</button>
-  <a href="{% url 'lista_usuarios' %}">Limpiar</a>
+    <input type="text" name="documento" placeholder="Documento (tipo o número)" value="{{ documento }}"/>
+
+    <button type="submit">Filtrar</button>
+
+    <a href="{% url 'lista_usuarios' %}">Limpiar</a>
+
+    <!-- BOTONES REPORTE -->
+     <div style="display:flex; gap:8px;">
+    <a href="/accounts/reporte-usuarios/?formato=excel&nombre={{ nombre }}&rol={{ rol }}&estado={{ estado }}&documento={{ documento }}">
+      📊 Descargar Excel
+    </a>
+
+    <a href="/accounts/reporte-usuarios/?formato=pdf&nombre={{ nombre }}&rol={{ rol }}&estado={{ estado }}&documento={{ documento }}">
+      📄 Descargar PDF
+    </a>
+    </div>
+
+  </div>
 </form>
+
 
 <table border="1" cellpadding="8" cellspacing="0" width="100%">
   <thead>
@@ -49,7 +75,37 @@
         <td>{{ u.email }}</td>
         <td>{{ u.telefono }}</td>
         <td>
-          <a href="{% url 'ver_usuario_admin' u.id %}">Ver</a>
+          <td>
+            <a href="{% url 'ver_usuario_admin' u.id %}">Ver</a>
+
+            {% if u.rol != "Administrador" %}
+              <form method="POST" action="{% url 'cambiar_estado_usuario' u.id %}" style="display:inline;">
+                {% csrf_token %}
+
+                <input type="text" name="motivo" placeholder="Motivo" style="width:100px;">
+
+                {% if u.estado %}
+                  <button type="submit"
+                          onclick="return confirm('¿Seguro que desea DESACTIVAR este usuario?')"
+                          style="background-color:red;color:white;">
+                    Desactivar
+                  </button>
+                {% else %}
+                  <button type="submit"
+                          onclick="return confirm('¿Seguro que desea ACTIVAR este usuario?')"
+                          style="background-color:green;color:white;">
+                    Activar
+                  </button>
+                {% endif %}
+
+              </form>
+            {% else %}
+              <span style="color:gray;">Protegido</span>
+            {% endif %}
+
+          </td>
+
+
           {# placeholders para lo que pidas luego #}
           {# <a href="#">Editar</a> #}
           {# <a href="#">Deshabilitar</a> #}

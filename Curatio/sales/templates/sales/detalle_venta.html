@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Curatio | Venta {{ venta.numero_factura }}{% endblock %}
+
+{% block content %}
+<h2 style="margin:0 0 6px;">Venta {{ venta.numero_factura }}</h2>
+<p style="margin:0 0 14px; color: rgba(147,164,199,1); font-size:14px;">
+  {{ venta.get_estado_display }} · {{ venta.fecha_hora|date:"Y-m-d H:i" }} · Pago: {{ venta.get_tipo_pago_display }}
+</p>
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:16px;">
+  <div style="border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:12px;">
+    <div style="font-size:12px; color: rgba(147,164,199,1);">Cliente</div>
+    <div><b>{{ venta.cliente.nombre }}</b></div>
+    <div style="font-size:13px;">{{ venta.cliente.email }}</div>
+  </div>
+  <div style="border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:12px;">
+    <div style="font-size:12px; color: rgba(147,164,199,1);">Quien registró la venta</div>
+    <div><b>{{ venta.vendedor.nombre }}</b> ({{ venta.vendedor.rol }})</div>
+    <div style="font-size:13px;">{{ venta.vendedor.email }}</div>
+  </div>
+</div>
+
+<div style="overflow:auto; border:1px solid rgba(255,255,255,.10); border-radius:14px; margin-bottom:16px;">
+  <table style="width:100%; border-collapse:collapse; font-size:13px;">
+    <thead>
+      <tr style="text-align:left; border-bottom:1px solid rgba(255,255,255,.10);">
+        <th style="padding:10px;">Medicamento</th>
+        <th style="padding:10px;">Cantidad</th>
+        <th style="padding:10px;">P. unitario</th>
+        <th style="padding:10px;">Subtotal línea</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ln in venta.lineas.all %}
+      <tr style="border-bottom:1px solid rgba(255,255,255,.06);">
+        <td style="padding:10px;">{{ ln.medicamento.nombre }}</td>
+        <td style="padding:10px;">{{ ln.cantidad }}</td>
+        <td style="padding:10px;">{{ ln.precio_unitario }}</td>
+        <td style="padding:10px;">{{ ln.subtotal_linea }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; max-width:420px; margin-bottom:16px; font-size:14px;">
+  <div style="color: rgba(147,164,199,1);">Subtotal</div><div>{{ venta.subtotal }}</div>
+  <div style="color: rgba(147,164,199,1);">IVA</div><div>{{ venta.iva }}</div>
+  <div style="color: rgba(147,164,199,1);">Descuento</div><div>{{ venta.descuento }}</div>
+  <div style="color: rgba(147,164,199,1);"><b>Total</b></div><div><b>{{ venta.total }}</b></div>
+</div>
+
+{% if venta.estado == "Pendiente" %}
+<div style="border:1px solid rgba(255,204,102,.35); background: rgba(255,204,102,.08); padding:12px 14px; border-radius:14px; margin-bottom:16px; font-size:14px;">
+  <b>Confirmación de pago (obligatoria para completar)</b><br/>
+  <span style="color: rgba(147,164,199,1);">
+    Personal:
+    {% if venta.confirmacion_vendedor_en %}
+      ✓ {{ venta.confirmacion_vendedor_en|date:"Y-m-d H:i" }} ({{ venta.confirmacion_vendedor_por.email }})
+    {% else %}
+      pendiente
+    {% endif %}
+    <br/>
+    Cliente:
+    {% if venta.confirmacion_cliente_en %}
+      ✓ {{ venta.confirmacion_cliente_en|date:"Y-m-d H:i" }} ({{ venta.confirmacion_cliente_por.email }})
+    {% else %}
+      pendiente
+    {% endif %}
+  </span>
+</div>
+{% endif %}
+
+<div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
+  {% if puede_confirmar_vendedor %}
+  <form method="post" action="{% url 'confirmar_pago_vendedor' venta.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="btn primary">Confirmar recepción del pago (farmacia)</button>
+  </form>
+  {% endif %}
+  {% if puede_confirmar_cliente %}
+  <form method="post" action="{% url 'confirmar_pago_cliente' venta.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="btn primary">Confirmo el pago (cliente)</button>
+  </form>
+  {% endif %}
+  {% if puede_anular %}
+  <form method="post" action="{% url 'anular_venta' venta.pk %}" onsubmit="return confirm('¿Anular esta venta?');">
+    {% csrf_token %}
+    <button type="submit" class="btn danger">Anular venta</button>
+  </form>
+  {% endif %}
+  <a class="btn" href="{% url 'dashboard' %}">Volver al panel</a>
+  {% if user.rol == "Administrador" or user.rol == "Farmaceuta" %}
+  <a class="btn" href="{% url 'crear_venta' %}">Nueva venta</a>
+  {% endif %}
+</div>
+
+<div>
+  <b style="display:block; margin-bottom:8px;">Historial</b>
+  <ul style="margin:0; padding-left:18px; color: rgba(147,164,199,1); font-size:13px;">
+    {% for h in venta.historial.all %}
+    <li style="margin-bottom:6px;">
+      <span style="color:#e8eefc;">{{ h.fecha|date:"Y-m-d H:i" }}</span> — {{ h.accion }} por {{ h.usuario.email }}
+      {% if h.detalle %}<div style="margin-top:2px;">{{ h.detalle }}</div>{% endif %}
+    </li>
+    {% empty %}
+    <li>Sin registros.</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}
