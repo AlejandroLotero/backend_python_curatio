@@ -5,6 +5,8 @@ from django.conf.urls.static import static
 
 from accounts.api_user_views import (
     users_resource,
+    # Recurso colección de usuarios.
+    user_me_profile_resource, 
     user_detail_resource,
     user_status_resource,
 )
