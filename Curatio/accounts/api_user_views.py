@@ -1,4 +1,4 @@
-from django.core.mail import send_mail
+from .email_utils import send_account_created_email
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -178,7 +178,7 @@ def users_resource(request):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Please correct the highlighted fields.",
+                    "message": "Por favor validar los campos resaltados en rojo ",
                     "fields": _flatten_form_errors(form),
                 }
             },
@@ -216,19 +216,8 @@ def users_resource(request):
     )
 
     # Enviar correo con la contraseña generada
-    send_mail(
-        subject="Cuenta creada - Curatio",
-        message=(
-            f"Hola {user.nombre},\n\n"
-            "Tu cuenta ha sido creada correctamente.\n"
-            f"Correo: {user.email}\n"
-            f"Contraseña temporal: {generated_password}\n\n"
-            "Te recomendamos cambiarla cuando ingreses al sistema."
-        ),
-        from_email=None,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
+    # Enviar correo con diseño profesional
+    send_account_created_email(user, generated_password)
 
     return Response(
         {

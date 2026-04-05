@@ -48,13 +48,12 @@ urlpatterns = [
     # =========================
     path("v1/people/users/", users_resource, name="users_resource"),
     path("v1/people/users/<int:user_id>/", user_detail_resource, name="user_detail_resource"),
-    path("v1/people/users/<int:user_id>/status/", user_status_resource, name="user_status_resource"),    
     path("v1/people/users/<int:user_id>/status/", user_status_resource, name="user_status_resource"),
 
     path("", include("accounts.urls")),
     path("", include("products.urls")),
     path("", include("sales.urls")),
-    path("api/", include("sales.urls")),
+    path("api/", include("sales.urls")),    
 ]
 
 if settings.DEBUG:

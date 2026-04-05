@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.core.mail import send_mail
+from .email_utils import send_password_reset_email
 from django.middleware.csrf import get_token
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
@@ -64,28 +64,10 @@ def _build_password_reset_link(uidb64, token):
 def _send_password_reset_email(user, uidb64, token):
     """
     Envía el correo de recuperación de contraseña.
-    Incluye:
-    - link directo
-    - token visible
+    Mantiene la lógica existente, pero delega el diseño del correo
+    a un helper reutilizable.
     """
-    reset_link = _build_password_reset_link(uidb64, token)
-
-    subject = "Restablecimiento de contraseña - Curatio"
-    message = (
-        f"Hola {user.nombre},\n\n"
-        "Recibimos una solicitud para restablecer tu contraseña.\n\n"
-        f"Link de restablecimiento:\n{reset_link}\n\n"
-        f"Si necesitas ingresar el token manualmente, usa este token:\n{token}\n\n"
-        "Si no solicitaste este cambio, puedes ignorar este correo.\n"
-    )
-
-    send_mail(
-        subject=subject,
-        message=message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[user.email],
-        fail_silently=False,
-    )
+    send_password_reset_email(user, uidb64, token)
 
 
 @api_view(["GET"])
@@ -402,7 +384,7 @@ def password_recovery_confirm_view(request):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Please correct the highlighted fields.",
+                    "message": "No estás cumpliendo con las reglas de negocio",
                     "fields": field_errors,
                 }
             },
