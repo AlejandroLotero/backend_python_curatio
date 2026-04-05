@@ -5,6 +5,8 @@ from django.conf.urls.static import static
 
 from accounts.api_user_views import (
     users_resource,
+    # Recurso colección de usuarios.
+    user_me_profile_resource, 
     user_detail_resource,
     user_status_resource,
 )
@@ -47,7 +49,9 @@ urlpatterns = [
     # USERS
     # =========================
     path("v1/people/users/", users_resource, name="users_resource"),
-    path("v1/people/users/<int:user_id>/", user_detail_resource, name="user_detail_resource"),
+    path("v1/people/users/me/", user_me_profile_resource, name="user_me_profile"),
+    # Recurso detalle de usuario.
+    path("v1/people/users/<int:user_id>/", user_detail_resource, name="user_detail_resource"), 
     path("v1/people/users/<int:user_id>/status/", user_status_resource, name="user_status_resource"),
 
     path("", include("accounts.urls")),

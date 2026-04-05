@@ -1,12 +1,14 @@
 from django.urls import path
 from . import views
-from . import api_views
+from . import api_products_views as api_views
 
 urlpatterns = [
     # =========================
     # SPA / V1
     # =========================
     path("v1/inventory/medications/", api_views.medications_resource, name="medications_resource"),
+    path("v1/inventory/medications/client/list/",api_views.medications_client_list_resource,name="medications_client_list"),
+    path("v1/inventory/medications/client/view/",api_views.medication_client_view_resource,name="medication_client_view"),
     path("v1/inventory/medications/<int:medication_id>/", api_views.medication_detail_resource, name="medication_detail_resource"),
     path("v1/inventory/medications/<int:medication_id>/status/", api_views.medication_status_resource, name="medication_status_resource"),
 
