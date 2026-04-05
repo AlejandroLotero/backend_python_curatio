@@ -2,7 +2,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -85,14 +85,8 @@ def _serialize_catalog_item(item):
 
 
 @api_view(["GET", "POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def medications_resource(request):
-    if not _is_admin(request.user):
-        return Response(
-            {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-
     if request.method == "GET":
         queryset = Medicamento.objects.select_related(
             "forma",
@@ -156,17 +150,18 @@ def medications_resource(request):
     form = CrearMedicamentoForm(request.data)
     if form.is_valid():
         medication = form.save(commit=False)
-        medication.creado_por = request.user
+        medication.creado_por = request.user if request.user.is_authenticated else None
         medication.requiere_formula = False
         medication.laboratorio_texto = medication.laboratorio.nombre if medication.laboratorio else None
         medication.save()
 
-        MedicamentoHistorial.objects.create(
-            medicamento=medication,
-            accion="CREADO",
-            usuario=request.user,
-            detalle="Medication created from SPA integration."
-        )
+        if request.user.is_authenticated:
+            MedicamentoHistorial.objects.create(
+                medicamento=medication,
+                accion="CREADO",
+                usuario=request.user,
+                detalle="Medication created from SPA integration."
+            )
 
         return Response(
             {
@@ -191,14 +186,8 @@ def medications_resource(request):
 
 
 @api_view(["GET", "PUT"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def medication_detail_resource(request, medication_id):
-    if not _is_admin(request.user):
-        return Response(
-            {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
-            status=status.HTTP_403_FORBIDDEN,
-        )
-
     medication = get_object_or_404(
         Medicamento.objects.select_related(
             "forma",
@@ -227,12 +216,13 @@ def medication_detail_resource(request, medication_id):
         updated.laboratorio_texto = updated.laboratorio.nombre if updated.laboratorio else None
         updated.save()
 
-        MedicamentoHistorial.objects.create(
-            medicamento=updated,
-            accion="ACTUALIZADO",
-            usuario=request.user,
-            detalle="Medication updated from SPA integration."
-        )
+        if request.user.is_authenticated:
+            MedicamentoHistorial.objects.create(
+                medicamento=updated,
+                accion="ACTUALIZADO",
+                usuario=request.user,
+                detalle="Medication updated from SPA integration."
+            )
 
         return Response({
             "data": {
@@ -253,15 +243,26 @@ def medication_detail_resource(request, medication_id):
     )
 
 
-@api_view(["PATCH"])
-@permission_classes([IsAuthenticated])
-def medication_status_resource(request, medication_id):
-    if not _is_admin(request.user):
-        return Response(
-            {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+@api_view(["DELETE"])
+@permission_classes([AllowAny])
+def medication_delete_resource(request, medication_id):
+    medication = get_object_or_404(Medicamento, pk=medication_id)
+    
+    medication_name = medication.nombre
+    medication.delete()
 
+    return Response({
+        "data": {
+            "id": medication_id,
+            "name": medication_name
+        },
+        "message": "Medication deleted successfully."
+    }, status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["PATCH"])
+@permission_classes([AllowAny])
+def medication_status_resource(request, medication_id):
     medication = get_object_or_404(Medicamento.objects.select_related("estado"), pk=medication_id)
     status_id = request.data.get("status_id")
 
@@ -294,12 +295,13 @@ def medication_status_resource(request, medication_id):
     medication.estado = new_status
     medication.save(update_fields=["estado", "actualizado_en"])
 
-    MedicamentoHistorial.objects.create(
-        medicamento=medication,
-        accion="CAMBIO_ESTADO",
-        usuario=request.user,
-        detalle=f"Status changed: {old_status} -> {new_status.nombre}",
-    )
+    if request.user.is_authenticated:
+        MedicamentoHistorial.objects.create(
+            medicamento=medication,
+            accion="CAMBIO_ESTADO",
+            usuario=request.user,
+            detalle=f"Status changed: {old_status} -> {new_status.nombre}",
+        )
 
     return Response({
         "data": {
@@ -310,7 +312,7 @@ def medication_status_resource(request, medication_id):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def pharmaceutical_forms_catalog(request):
     items = FormaFarmaceutica.objects.filter(activo=True).order_by("nombre")
     return Response({
@@ -322,7 +324,7 @@ def pharmaceutical_forms_catalog(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def presentations_catalog(request):
     form_id = request.GET.get("pharmaceutical_form_id")
     queryset = Presentacion.objects.filter(activo=True)
@@ -350,7 +352,7 @@ def presentations_catalog(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def administration_routes_catalog(request):
     items = ViaAdministracion.objects.filter(activo=True).order_by("nombre")
     return Response({
@@ -362,7 +364,7 @@ def administration_routes_catalog(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def laboratories_catalog(request):
     items = Laboratorio.objects.filter(activo=True).order_by("nombre")
     return Response({
@@ -374,7 +376,7 @@ def laboratories_catalog(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def medication_statuses_catalog(request):
     items = EstadoMedicamento.objects.filter(activo=True).order_by("nombre")
     return Response({
@@ -386,7 +388,7 @@ def medication_statuses_catalog(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def suppliers_catalog(request):
     queryset = Proveedor.objects.all().order_by("nombre")
     supplier_status = (request.GET.get("status") or "").strip()

@@ -8,6 +8,7 @@ urlpatterns = [
     # =========================
     path("v1/inventory/medications/", api_views.medications_resource, name="medications_resource"),
     path("v1/inventory/medications/<int:medication_id>/", api_views.medication_detail_resource, name="medication_detail_resource"),
+    path("v1/inventory/medications/<int:medication_id>/delete/", api_views.medication_delete_resource, name="medication_delete_resource"),
     path("v1/inventory/medications/<int:medication_id>/status/", api_views.medication_status_resource, name="medication_status_resource"),
 
     path("v1/catalogs/pharmaceutical-forms/", api_views.pharmaceutical_forms_catalog, name="pharmaceutical_forms_catalog"),
