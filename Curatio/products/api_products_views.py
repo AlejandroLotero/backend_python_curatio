@@ -15,8 +15,9 @@ from .models import (
     EstadoMedicamento,
     Proveedor,
     MedicamentoHistorial,
+    ProveedorHistorial,
 )
-from .forms import CrearMedicamentoForm, ActualizarMedicamentoForm
+from .forms import CrearMedicamentoForm, ActualizarMedicamentoForm, CrearProveedorForm
 
 
 def _is_admin(user):
@@ -703,29 +704,175 @@ def medication_statuses_catalog(request):
         "message": "Medication statuses retrieved successfully."
     })
 
+#Funcion para serializar los datos del proveedor
+def _serialize_supplier_row(item):
+    """
+    Serialización alineada al modelo Proveedor (products/models.py).
+    Se mantienen id/name/nit/status para compatibilidad con selects de medicamentos
+    y catálogos existentes; el resto alimenta el módulo SPA de proveedores.
+    """
+    return {
+        "id": item.nit,
+        "name": item.nombre,
+        "nit": item.nit,
+        "status": item.estado,
+        "razon_social": item.razon_social or "",
+        "nombre_contacto": item.nombre_contacto or "",
+        "telefono_contacto": item.telefono_contacto or "",
+        "correo_contacto": item.correo_contacto or "",
+        "direccion": item.direccion or "",
+        "ciudad": item.ciudad or "",
+    }
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def suppliers_catalog(request):
+    """
+    GET: listado para la tabla SPA y para ?status=Activo (medicamentos).
+    POST: alta de proveedor (solo Administrador), misma validación que CrearProveedorForm.
+    """
+    if request.method == "GET":
+        queryset = Proveedor.objects.all().order_by("nombre")
+        supplier_status = (request.GET.get("status") or "").strip()
+
+        if supplier_status:
+            queryset = queryset.filter(estado=supplier_status)
+
+        results = [_serialize_supplier_row(item) for item in queryset]
+
+        return Response({
+            "data": {
+                "results": results
+            },
+            "message": "Suppliers retrieved successfully."
+        })
+
+    if not _is_admin(request.user):
+        return Response(
+            {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    form = CrearProveedorForm(request.data)
+    if form.is_valid():
+        proveedor = form.save(commit=False)
+        proveedor.creado_por = request.user
+        proveedor.full_clean()
+        proveedor.save()
+
+        ProveedorHistorial.objects.create(
+            proveedor=proveedor,
+            accion="CREADO",
+            usuario=request.user,
+            detalle="Proveedor creado desde API (SPA).",
+        )
+
+        return Response(
+            {
+                "data": {
+                    "supplier": _serialize_supplier_row(proveedor),
+                },
+                "message": "Supplier created successfully.",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    return Response(
+        {
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Please correct the highlighted fields.",
+                "fields": form.errors,
+            }
+        },
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def suppliers_catalog(request):
-    queryset = Proveedor.objects.all().order_by("nombre")
-    supplier_status = (request.GET.get("status") or "").strip()
-
-    if supplier_status:
-        queryset = queryset.filter(estado=supplier_status)
-
-    results = [
-        {
-            "id": item.nit,
-            "name": item.nombre,
-            "nit": item.nit,
-            "status": item.estado,
-        }
-        for item in queryset
-    ]
+def supplier_detail_resource(request, supplier_nit):
+    """Detalle por NIT (PK de Proveedor) para la vista SPA de proveedor."""
+    proveedor = Proveedor.objects.filter(pk=supplier_nit).first()
+    if not proveedor:
+        return Response(
+            {
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Supplier not found.",
+                    "fields": {},
+                }
+            },
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
     return Response({
         "data": {
-            "results": results
+            "supplier": _serialize_supplier_row(proveedor),
         },
-        "message": "Suppliers retrieved successfully."
+        "message": "Supplier retrieved successfully.",
+    })
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def supplier_status_resource(request, supplier_nit):
+    """Cambio de estado Activo/Inactivo (paridad con cambiar_estado_proveedor en views.py)."""
+    if not _is_admin(request.user):
+        return Response(
+            {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    proveedor = Proveedor.objects.filter(pk=supplier_nit).first()
+    if not proveedor:
+        return Response(
+            {
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Supplier not found.",
+                    "fields": {},
+                }
+            },
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    nuevo_estado = (request.data.get("estado") or "").strip()
+    if nuevo_estado not in ["Activo", "Inactivo"]:
+        return Response(
+            {
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Invalid status.",
+                    "fields": {"estado": ['Debe ser "Activo" o "Inactivo".']},
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    estado_anterior = proveedor.estado
+    if estado_anterior == nuevo_estado:
+        return Response({
+            "data": {
+                "supplier": _serialize_supplier_row(proveedor),
+            },
+            "message": "Supplier status unchanged.",
+        })
+
+    proveedor.estado = nuevo_estado
+    proveedor.save(update_fields=["estado", "actualizado_en"])
+
+    ProveedorHistorial.objects.create(
+        proveedor=proveedor,
+        accion="CAMBIO_ESTADO",
+        usuario=request.user,
+        detalle=f"Estado: {estado_anterior} → {nuevo_estado}",
+    )
+
+    return Response({
+        "data": {
+            "supplier": _serialize_supplier_row(proveedor),
+        },
+        "message": "Supplier status updated successfully.",
     })

@@ -17,6 +17,9 @@ urlpatterns = [
     path("v1/catalogs/administration-routes/", api_views.administration_routes_catalog, name="administration_routes_catalog"),
     path("v1/catalogs/laboratories/", api_views.laboratories_catalog, name="laboratories_catalog"),
     path("v1/catalogs/medication-statuses/", api_views.medication_statuses_catalog, name="medication_statuses_catalog"),
+    # Proveedores (modelo Proveedor en products/models.py): rutas más específicas primero.
+    path("v1/procurement/suppliers/<str:supplier_nit>/status/",api_views.supplier_status_resource,name="supplier_status_resource"),
+    path("v1/procurement/suppliers/<str:supplier_nit>/",api_views.supplier_detail_resource,name="supplier_detail_resource"),
     path("v1/procurement/suppliers/", api_views.suppliers_catalog, name="suppliers_catalog"),
 
     # =========================
