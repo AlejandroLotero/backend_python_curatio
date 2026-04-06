@@ -27,11 +27,16 @@
         >
     </div>
 
-    <div style="display:flex; align-items:end; gap:10px;">
+    <div style="display:flex; align-items:end; gap:10px; flex-wrap:wrap;">
         <button type="submit" class="btn primary">Buscar</button>
         <a href="{% url 'visualizar_proveedores' %}" class="btn">Limpiar</a>
+        <a href="{% url 'reporte_proveedores' %}?formato=excel&amp;nit={{ nit|urlencode }}&amp;nombre={{ nombre|urlencode }}" class="btn">📊 Reporte Excel</a>
+        <a href="{% url 'reporte_proveedores' %}?formato=pdf&amp;nit={{ nit|urlencode }}&amp;nombre={{ nombre|urlencode }}" class="btn">📄 Reporte PDF</a>
     </div>
 </form>
+<p style="margin:0 0 18px; font-size:.9rem; opacity:.85;">
+    Sin NIT ni nombre, el reporte incluye todos los proveedores. Con filtros, solo los que coincidan con la búsqueda.
+</p>
 
 {% if busqueda_realizada %}
     {% if proveedores %}
@@ -83,7 +88,7 @@
 
                     <div>
                         <strong>Creado por:</strong><br>
-                        <span>{{ proveedor.creado_por.email }}</span>
+                        <span>{% if proveedor.creado_por %}{{ proveedor.creado_por.email }}{% else %}—{% endif %}</span>
                     </div>
 
                     <div>
