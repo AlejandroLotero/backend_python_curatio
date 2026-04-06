@@ -217,3 +217,10 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
 }
+
+
+#============================
+#Para Envio del correo con template
+#============================
+EMAIL_BRAND_NAME = "Curatio"
+EMAIL_BRAND_LOGO_URL = "https://tu-dominio.com/static/img/logo-curatio.png"
