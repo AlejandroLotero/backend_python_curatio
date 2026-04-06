@@ -1,0 +1,21 @@
+Hola, {{ user.nombre }}
+
+Te damos la bienvenida a {{ brand_name }}.
+Tu cuenta ha sido creada exitosamente.
+
+Correo registrado:
+{{ user.email }}
+
+Contraseña temporal:
+{{ temporary_password }}
+
+{% if login_url %}
+Ingresa aquí:
+{{ login_url }}
+{% endif %}
+
+Recomendación de seguridad:
+Cambia tu contraseña en el primer ingreso y evita compartir tus credenciales con terceros.
+
+Este es un correo automático de {{ brand_name }}.
+{% if support_email %}Contacto de referencia: {{ support_email }}{% endif %}
