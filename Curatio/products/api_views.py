@@ -887,6 +887,7 @@ from .forms import (
     CrearMedicamentoForm,
     ActualizarMedicamentoForm,
     CrearProveedorForm,
+    ActualizarProveedorForm,
 )
 
 
@@ -1584,24 +1585,42 @@ def medication_statuses_catalog(request):
 @permission_classes([IsAuthenticated])
 def suppliers_catalog(request):
     """
-    GET: listado de proveedores.
+    GET: listado de proveedores para la SPA.
+         Soporta filtros por NIT, nombre y estado.
     POST: creación de proveedor por Administrador o Farmaceuta.
     """
     if request.method == "GET":
         queryset = Proveedor.objects.all().order_by("nombre")
+
+        supplier_nit = (request.GET.get("nit") or "").strip()
+        supplier_name = (request.GET.get("name") or "").strip()
         supplier_status = (request.GET.get("status") or "").strip()
+
+        if supplier_nit:
+            queryset = queryset.filter(nit__icontains=supplier_nit)
+
+        if supplier_name:
+            queryset = queryset.filter(nombre__icontains=supplier_name)
 
         if supplier_status:
             queryset = queryset.filter(estado=supplier_status)
 
         results = [_serialize_supplier_row(item) for item in queryset]
 
-        return Response({
-            "data": {
-                "results": results
-            },
-            "message": "Suppliers retrieved successfully."
-        })
+        return Response(
+            {
+                "data": {
+                    "results": results,
+                    "filters": {
+                        "nit": supplier_nit,
+                        "name": supplier_name,
+                        "status": supplier_status,
+                    },
+                    "count": len(results),
+                },
+                "message": "Suppliers retrieved successfully.",
+            }
+        )
 
     if not _puede_gestionar_proveedores(request.user):
         return _forbidden_suppliers_response()
@@ -1618,7 +1637,12 @@ def suppliers_catalog(request):
             proveedor=proveedor,
             accion="CREADO",
             usuario=request.user,
-            detalle="Proveedor creado desde API (SPA).",
+            detalle=(
+                "Proveedor creado desde API (SPA) "
+                f"el {proveedor.creado_en.strftime('%Y-%m-%d %H:%M:%S')}."
+                if proveedor.creado_en
+                else "Proveedor creado desde API (SPA)."
+            ),
         )
 
         return Response(
@@ -1648,7 +1672,12 @@ def suppliers_catalog(request):
 def supplier_detail_resource(request, supplier_nit):
     """
     GET: detalle por NIT.
-    PATCH: permite cambio de estado también desde la ruta del recurso.
+    PATCH: actualización completa de campos editables del proveedor.
+
+    Importante:
+    - El NIT se usa como PK y no se actualiza desde este recurso.
+    - El cambio exclusivo de estado también puede hacerse mediante
+      la ruta /status/ cuando el frontend quiera separar ambas acciones.
     """
     proveedor = Proveedor.objects.filter(pk=supplier_nit).first()
 
@@ -1665,24 +1694,29 @@ def supplier_detail_resource(request, supplier_nit):
         )
 
     if request.method == "GET":
-        return Response({
-            "data": {
-                "supplier": _serialize_supplier_row(proveedor),
-            },
-            "message": "Supplier retrieved successfully.",
-        })
+        return Response(
+            {
+                "data": {
+                    "supplier": _serialize_supplier_row(proveedor),
+                },
+                "message": "Supplier retrieved successfully.",
+            }
+        )
 
     if not _puede_gestionar_proveedores(request.user):
         return _forbidden_suppliers_response()
 
-    return _supplier_estado_change_response(request, proveedor)
+    return _supplier_update_response(request, proveedor)
 
 
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
 def supplier_status_resource(request, supplier_nit):
     """
-    Cambio de estado Activo/Inactivo del proveedor.
+    Cambio específico de estado Activo/Inactivo del proveedor.
+
+    Se mantiene como recurso dedicado para que la SPA pueda cambiar
+    el estado sin enviar el resto del formulario de edición.
     """
     if not _puede_gestionar_proveedores(request.user):
         return _forbidden_suppliers_response()
@@ -2019,4 +2053,105 @@ def public_medication_detail_resource(request, medication_id):
             "message": "Medication retrieved successfully."
         },
         status=status.HTTP_200_OK,
+    )
+
+def _serialize_supplier_suggestion(item):
+    """
+    Serialización reducida para sugerencias de búsqueda de proveedor.
+    """
+    return {
+        "id": item.nit,
+        "nit": item.nit,
+        "name": item.nombre,
+    }
+
+
+def _build_supplier_suggestions(queryset, raw_query, limit=5):
+    """
+    Construye sugerencias de proveedores cuando no existe coincidencia exacta.
+
+    Regla de negocio soportada:
+    - sugerir proveedores cuyo nombre difiera en 1 o 2 letras
+    - o que tengan similitud razonable por comparación difusa
+    """
+    normalized_query = (raw_query or "").strip().lower()
+
+    if not normalized_query:
+        return []
+
+    suggestions = []
+
+    for item in queryset:
+        candidate_name = (item.nombre or "").strip().lower()
+        length_diff = abs(len(candidate_name) - len(normalized_query))
+        similarity = SequenceMatcher(None, normalized_query, candidate_name).ratio()
+
+        if length_diff <= 2 or similarity >= 0.75:
+            suggestions.append((similarity, item))
+
+    suggestions.sort(key=lambda pair: pair[0], reverse=True)
+
+    return [
+        _serialize_supplier_suggestion(item)
+        for _, item in suggestions[:limit]
+    ]
+
+
+def _supplier_update_response(request, proveedor):
+    """
+    Actualiza los campos editables del proveedor y registra historial.
+
+    Campos permitidos por requerimiento:
+    - nombre
+    - razon_social
+    - nombre_contacto
+    - telefono_contacto
+    - correo_contacto
+    - direccion
+    - ciudad
+    - estado
+
+    Regla de negocio:
+    - el NIT no se modifica desde la API de actualización
+    """
+    # Se toma una copia mutable para ignorar cualquier intento
+    # de cambiar el NIT desde el cliente.
+    payload = request.data.copy()
+    payload.pop("nit", None)
+
+    form = ActualizarProveedorForm(payload, instance=proveedor)
+
+    if form.is_valid():
+        proveedor_actualizado = form.save()
+
+        ProveedorHistorial.objects.create(
+            proveedor=proveedor_actualizado,
+            accion="ACTUALIZADO",
+            usuario=request.user,
+            detalle=(
+                "Proveedor actualizado desde API (SPA) "
+                f"el {proveedor_actualizado.actualizado_en.strftime('%Y-%m-%d %H:%M:%S')}."
+                if proveedor_actualizado.actualizado_en
+                else "Proveedor actualizado desde API (SPA)."
+            ),
+        )
+
+        return Response(
+            {
+                "data": {
+                    "supplier": _serialize_supplier_row(proveedor_actualizado),
+                },
+                "message": "Supplier updated successfully.",
+            }
+        )
+
+    return Response(
+        {
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Please correct the highlighted fields.",
+                "fields": form.errors,
+            }
+        },
+        status=status.HTTP_400_BAD_REQUEST,
     )
