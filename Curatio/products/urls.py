@@ -2,14 +2,38 @@
 # from . import api_views
 
 # urlpatterns = [
-
-#      # =========================
+#     # =========================
 #     # SPA / V1 PÚBLICO-COMERCIAL
 #     # =========================
-#     path("v1/catalogs/medications/", api_views.public_medications_search_resource, name="public_medications_search_resource"),
-#     path("v1/catalogs/medications/<int:medication_id>/", api_views.public_medication_detail_resource, name="public_medication_detail_resource"),
-#     path("v1/catalog/medications/search/", api_views.public_medications_search_resource, name="public_medications_search_resource"),
-#     path("v1/catalog/medications/<int:medication_id>/", api_views.public_medication_detail_resource, name="public_medication_detail_resource"),
+
+#     # Listado/catálogo general para home y resultados amplios
+#     path(
+#         "v1/catalogs/medications/",
+#         api_views.catalog_medications_resource,
+#         name="catalog_medications_resource",
+#     ),
+
+#     # Detalle público/comercial
+#     path(
+#         "v1/catalogs/medications/<int:medication_id>/",
+#         api_views.public_medication_detail_resource,
+#         name="public_medication_detail_resource",
+#     ),
+
+#     # Búsqueda rápida/autocompletado del navbar
+#     path(
+#         "v1/catalog/medications/search/",
+#         api_views.public_medications_search_resource,
+#         name="public_medications_search_resource",
+#     ),
+
+#     # Alias opcional del detalle público
+#     path(
+#         "v1/catalog/medications/<int:medication_id>/",
+#         api_views.public_medication_detail_resource,
+#         name="public_medication_detail_alias_resource",
+#     ),
+
 #     # =========================
 #     # INVENTARIO / GESTIÓN
 #     # =========================
@@ -32,34 +56,10 @@ urlpatterns = [
     # =========================
     # SPA / V1 PÚBLICO-COMERCIAL
     # =========================
-
-    # Listado/catálogo general para home y resultados amplios
-    path(
-        "v1/catalogs/medications/",
-        api_views.catalog_medications_resource,
-        name="catalog_medications_resource",
-    ),
-
-    # Detalle público/comercial
-    path(
-        "v1/catalogs/medications/<int:medication_id>/",
-        api_views.public_medication_detail_resource,
-        name="public_medication_detail_resource",
-    ),
-
-    # Búsqueda rápida/autocompletado del navbar
-    path(
-        "v1/catalog/medications/search/",
-        api_views.public_medications_search_resource,
-        name="public_medications_search_resource",
-    ),
-
-    # Alias opcional del detalle público
-    path(
-        "v1/catalog/medications/<int:medication_id>/",
-        api_views.public_medication_detail_resource,
-        name="public_medication_detail_alias_resource",
-    ),
+    path("v1/catalogs/medications/", api_views.public_medications_search_resource, name="public_medications_search_resource"),
+    path("v1/catalogs/medications/<int:medication_id>/", api_views.public_medication_detail_resource, name="public_medication_detail_resource"),
+    path("v1/catalog/medications/search/", api_views.public_medications_search_resource, name="public_medications_search_resource"),
+    path("v1/catalog/medications/<int:medication_id>/", api_views.public_medication_detail_resource, name="public_medication_detail_resource"),
 
     # =========================
     # INVENTARIO / GESTIÓN
@@ -73,5 +73,11 @@ urlpatterns = [
     path("v1/catalogs/administration-routes/", api_views.administration_routes_catalog, name="administration_routes_catalog"),
     path("v1/catalogs/laboratories/", api_views.laboratories_catalog, name="laboratories_catalog"),
     path("v1/catalogs/medication-statuses/", api_views.medication_statuses_catalog, name="medication_statuses_catalog"),
+
+    # =========================
+    # PROVEEDORES
+    # =========================
     path("v1/procurement/suppliers/", api_views.suppliers_catalog, name="suppliers_catalog"),
+    path("v1/procurement/suppliers/<str:supplier_nit>/", api_views.supplier_detail_resource, name="supplier_detail_resource"),
+    path("v1/procurement/suppliers/<str:supplier_nit>/status/", api_views.supplier_status_resource, name="supplier_status_resource"),
 ]
