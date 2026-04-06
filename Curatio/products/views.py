@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponse
@@ -43,6 +44,24 @@ except ImportError:
 
 # Tamaño de página según regla de negocio: si hay más de 50 registros, paginación
 PAGE_SIZE_MEDICAMENTOS = 50
+
+
+def _puede_gestionar_proveedores(user):
+    if not getattr(user, "is_authenticated", False):
+        return False
+    pk = getattr(user, "pk", None)
+    if not pk:
+        return False
+    rol = (
+        get_user_model()
+        .objects.filter(pk=pk)
+        .values_list("rol", flat=True)
+        .first()
+    )
+    if rol is None:
+        return False
+    r = str(rol).strip().casefold()
+    return r in ("administrador", "farmaceuta")
 
 
 # =========================
@@ -391,6 +410,101 @@ def reporte_medicamentos(request):
 
 
 # =========================
+# REPORTE PROVEEDORES
+# =========================
+
+@login_required
+@never_cache
+def reporte_proveedores(request):
+    if not _puede_gestionar_proveedores(request.user):
+        return redirect("login")
+
+    formato = request.GET.get("formato")
+    nit = (request.GET.get("nit") or "").strip()
+    nombre = (request.GET.get("nombre") or "").strip()
+
+    qs = Proveedor.objects.select_related("creado_por").order_by("nombre")
+    if nit or nombre:
+        filtros = Q()
+        if nit:
+            filtros &= Q(nit__icontains=nit)
+        if nombre:
+            filtros &= Q(nombre__icontains=nombre)
+        qs = qs.filter(filtros)
+
+    if not qs.exists():
+        messages.warning(request, "No hay proveedores para el filtro seleccionado.")
+        return redirect("visualizar_proveedores")
+
+    if formato == "excel" and Workbook:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Proveedores"
+
+        headers = [
+            "NIT", "Nombre", "Razón social", "Contacto", "Teléfono contacto", "Correo contacto",
+            "Dirección", "Ciudad", "Estado", "Creado por", "Creado en", "Actualizado en",
+        ]
+        ws.append(headers)
+
+        for p in qs:
+            ws.append([
+                p.nit,
+                p.nombre,
+                p.razon_social or "",
+                p.nombre_contacto or "",
+                p.telefono_contacto or "",
+                p.correo_contacto or "",
+                p.direccion or "",
+                p.ciudad or "",
+                p.estado,
+                p.creado_por.email if p.creado_por else "",
+                p.creado_en.strftime("%Y-%m-%d %H:%M") if p.creado_en else "",
+                p.actualizado_en.strftime("%Y-%m-%d %H:%M") if p.actualizado_en else "",
+            ])
+
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = 'attachment; filename="reporte_proveedores.xlsx"'
+        wb.save(response)
+        return response
+
+    if formato == "pdf" and SimpleDocTemplate:
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter)
+
+        data = [[
+            "NIT", "Nombre", "Ciudad", "Estado", "Contacto",
+        ]]
+
+        for p in qs:
+            data.append([
+                p.nit,
+                (p.nombre[:28] + "…") if len(p.nombre or "") > 28 else (p.nombre or ""),
+                (p.ciudad or "")[:15],
+                p.estado,
+                (p.nombre_contacto or "")[:20],
+            ])
+
+        table = Table(data, repeatRows=1)
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+            ("FONTSIZE", (0, 0), (-1, -1), 7),
+        ]))
+
+        doc.build([table])
+        buffer.seek(0)
+
+        response = HttpResponse(buffer, content_type="application/pdf")
+        response["Content-Disposition"] = 'attachment; filename="reporte_proveedores.pdf"'
+        return response
+
+    return redirect("visualizar_proveedores")
+
+
+# =========================
 # EDITAR MEDICAMENTO
 # =========================
 
@@ -442,7 +556,7 @@ def editar_medicamento(request, pk):
 @login_required
 @never_cache
 def crear_proveedor(request):
-    if request.user.rol != "Administrador":
+    if not _puede_gestionar_proveedores(request.user):
         return redirect("login")
 
     if request.method == "POST":
@@ -480,7 +594,7 @@ def crear_proveedor(request):
 @login_required
 @never_cache
 def visualizar_proveedores(request):
-    if request.user.rol != "Administrador":
+    if not _puede_gestionar_proveedores(request.user):
         return redirect("login")
 
     nit = (request.GET.get("nit") or "").strip()
@@ -537,7 +651,7 @@ def visualizar_proveedores(request):
 @login_required
 @never_cache
 def editar_proveedor(request, pk):
-    if request.user.rol != "Administrador":
+    if not _puede_gestionar_proveedores(request.user):
         return redirect("login")
 
     proveedor = Proveedor.objects.filter(pk=pk).first()
@@ -589,7 +703,7 @@ def editar_proveedor(request, pk):
 @login_required
 @never_cache
 def cambiar_estado_proveedor(request, pk):
-    if request.user.rol != "Administrador":
+    if not _puede_gestionar_proveedores(request.user):
         messages.error(request, "No tiene permisos para cambiar el estado del proveedor.")
         return redirect("login")
 

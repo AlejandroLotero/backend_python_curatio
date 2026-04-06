@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -22,6 +23,50 @@ from .forms import CrearMedicamentoForm, ActualizarMedicamentoForm, CrearProveed
 
 def _is_admin(user):
     return getattr(user, "rol", None) == "Administrador"
+
+
+def _puede_gestionar_proveedores(user):
+    """
+    Administrador o Farmaceuta. Lee el rol desde BD para evitar desajustes con la sesión
+    y normaliza espacios / mayúsculas en datos legados.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return False
+    pk = getattr(user, "pk", None)
+    if not pk:
+        return False
+    rol = (
+        get_user_model()
+        .objects.filter(pk=pk)
+        .values_list("rol", flat=True)
+        .first()
+    )
+    if rol is None:
+        return False
+    r = str(rol).strip().casefold()
+    return r in ("administrador", "farmaceuta")
+
+
+def _normalize_supplier_estado_payload(data):
+    """
+    Acepta estado en español o status en inglés (común en frontends).
+    """
+    raw = (data.get("estado") or data.get("status") or "").strip()
+    if raw in ("Activo", "Inactivo"):
+        return raw
+    low = raw.casefold()
+    if low in ("active", "activo", "true", "1", "enabled", "habilitado"):
+        return "Activo"
+    if low in ("inactive", "inactivo", "false", "0", "disabled", "deshabilitado"):
+        return "Inactivo"
+    return None
+
+
+def _forbidden_suppliers_response():
+    return Response(
+        {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 def _is_cliente(user):
@@ -725,12 +770,60 @@ def _serialize_supplier_row(item):
     }
 
 
+def _supplier_estado_change_response(request, proveedor):
+    """
+    Persiste Activo/Inactivo. El permiso ya debe haberse comprobado en la vista.
+    """
+    nuevo_estado = _normalize_supplier_estado_payload(request.data)
+    if nuevo_estado is None:
+        return Response(
+            {
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Invalid status.",
+                    "fields": {
+                        "estado": [
+                            'Debe ser "Activo" o "Inactivo" (o status active/inactive).'
+                        ]
+                    },
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    estado_anterior = proveedor.estado
+    if estado_anterior == nuevo_estado:
+        return Response({
+            "data": {
+                "supplier": _serialize_supplier_row(proveedor),
+            },
+            "message": "Supplier status unchanged.",
+        })
+
+    proveedor.estado = nuevo_estado
+    proveedor.save(update_fields=["estado", "actualizado_en"])
+
+    ProveedorHistorial.objects.create(
+        proveedor=proveedor,
+        accion="CAMBIO_ESTADO",
+        usuario=request.user,
+        detalle=f"Estado: {estado_anterior} → {nuevo_estado}",
+    )
+
+    return Response({
+        "data": {
+            "supplier": _serialize_supplier_row(proveedor),
+        },
+        "message": "Supplier status updated successfully.",
+    })
+
+
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def suppliers_catalog(request):
     """
     GET: listado para la tabla SPA y para ?status=Activo (medicamentos).
-    POST: alta de proveedor (solo Administrador), misma validación que CrearProveedorForm.
+    POST: alta de proveedor (Administrador o Farmaceuta), misma validación que CrearProveedorForm.
     """
     if request.method == "GET":
         queryset = Proveedor.objects.all().order_by("nombre")
@@ -748,11 +841,8 @@ def suppliers_catalog(request):
             "message": "Suppliers retrieved successfully."
         })
 
-    if not _is_admin(request.user):
-        return Response(
-            {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+    if not _puede_gestionar_proveedores(request.user):
+        return _forbidden_suppliers_response()
 
     form = CrearProveedorForm(request.data)
     if form.is_valid():
@@ -790,10 +880,14 @@ def suppliers_catalog(request):
     )
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def supplier_detail_resource(request, supplier_nit):
-    """Detalle por NIT (PK de Proveedor) para la vista SPA de proveedor."""
+    """
+    GET: detalle por NIT.
+    PATCH: mismo contrato que .../status/ (habilitar/deshabilitar), por si el cliente
+    envía el cambio de estado sobre la URL del recurso sin el sufijo /status/.
+    """
     proveedor = Proveedor.objects.filter(pk=supplier_nit).first()
     if not proveedor:
         return Response(
@@ -807,23 +901,26 @@ def supplier_detail_resource(request, supplier_nit):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    return Response({
-        "data": {
-            "supplier": _serialize_supplier_row(proveedor),
-        },
-        "message": "Supplier retrieved successfully.",
-    })
+    if request.method == "GET":
+        return Response({
+            "data": {
+                "supplier": _serialize_supplier_row(proveedor),
+            },
+            "message": "Supplier retrieved successfully.",
+        })
+
+    if not _puede_gestionar_proveedores(request.user):
+        return _forbidden_suppliers_response()
+
+    return _supplier_estado_change_response(request, proveedor)
 
 
 @api_view(["PATCH"])
 @permission_classes([IsAuthenticated])
 def supplier_status_resource(request, supplier_nit):
     """Cambio de estado Activo/Inactivo (paridad con cambiar_estado_proveedor en views.py)."""
-    if not _is_admin(request.user):
-        return Response(
-            {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+    if not _puede_gestionar_proveedores(request.user):
+        return _forbidden_suppliers_response()
 
     proveedor = Proveedor.objects.filter(pk=supplier_nit).first()
     if not proveedor:
@@ -838,41 +935,4 @@ def supplier_status_resource(request, supplier_nit):
             status=status.HTTP_404_NOT_FOUND,
         )
 
-    nuevo_estado = (request.data.get("estado") or "").strip()
-    if nuevo_estado not in ["Activo", "Inactivo"]:
-        return Response(
-            {
-                "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "Invalid status.",
-                    "fields": {"estado": ['Debe ser "Activo" o "Inactivo".']},
-                }
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    estado_anterior = proveedor.estado
-    if estado_anterior == nuevo_estado:
-        return Response({
-            "data": {
-                "supplier": _serialize_supplier_row(proveedor),
-            },
-            "message": "Supplier status unchanged.",
-        })
-
-    proveedor.estado = nuevo_estado
-    proveedor.save(update_fields=["estado", "actualizado_en"])
-
-    ProveedorHistorial.objects.create(
-        proveedor=proveedor,
-        accion="CAMBIO_ESTADO",
-        usuario=request.user,
-        detalle=f"Estado: {estado_anterior} → {nuevo_estado}",
-    )
-
-    return Response({
-        "data": {
-            "supplier": _serialize_supplier_row(proveedor),
-        },
-        "message": "Supplier status updated successfully.",
-    })
+    return _supplier_estado_change_response(request, proveedor)

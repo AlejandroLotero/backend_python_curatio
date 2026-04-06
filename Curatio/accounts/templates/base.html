@@ -201,11 +201,13 @@
         <div class="nav-section">Inventario</div>
         <a href="{% url 'listar_medicamentos' %}">Listar medicamentos <span class="pill">ADMIN</span></a>
         <a href="{% url 'crear_medicamento' %}">Crear medicamento <span class="pill">ADMIN</span></a>
+      {% endif %}
 
+      {% if user.is_authenticated and user.rol == "Administrador" or user.is_authenticated and user.rol == "Farmaceuta" %}
         <div class="nav-section">Proveedores</div>
-        <a href="{% url 'crear_proveedor' %}">Crear proveedor <span class="pill">ADMIN</span></a>
-        <a href="{% url 'visualizar_proveedores' %}">Visualizar proveedores <span class="pill">ADMIN</span></a>
-       {% endif %}
+        <a href="{% url 'crear_proveedor' %}">Crear proveedor</a>
+        <a href="{% url 'visualizar_proveedores' %}">Visualizar proveedores</a>
+      {% endif %}
 
       <div class="nav-section">Seguridad</div>
 
@@ -261,6 +263,8 @@
           <a class="btn" href="{% url 'listar_medicamentos' %}">Medicamentos</a>
           <a class="btn" href="{% url 'crear_usuario' %}">Crear usuario</a>
           <a class="btn" href="{% url 'crear_medicamento' %}">Crear medicamento</a>
+        {% endif %}
+        {% if user.is_authenticated and user.rol == "Administrador" or user.is_authenticated and user.rol == "Farmaceuta" %}
           <a class="btn" href="{% url 'crear_proveedor' %}">Crear proveedor</a>
           <a class="btn" href="{% url 'visualizar_proveedores' %}">Proveedores</a>
         {% endif %}
