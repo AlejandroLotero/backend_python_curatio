@@ -1,12 +1,13 @@
+# from difflib import SequenceMatcher
+
 # from django.core.paginator import Paginator
 # from django.db.models import Q
 # from django.shortcuts import get_object_or_404
+
 # from rest_framework.decorators import api_view, permission_classes
-# from rest_framework.permissions import IsAuthenticated
+# from rest_framework.permissions import IsAuthenticated, AllowAny
 # from rest_framework.response import Response
 # from rest_framework import status
-# from difflib import SequenceMatcher
-# from rest_framework.permissions import AllowAny
 
 # from .models import (
 #     Medicamento,
@@ -25,10 +26,27 @@
 #     return getattr(user, "rol", None) == "Administrador"
 
 
-# def _serialize_medication(m):
+# def _build_media_url(request, file_field):
+#     """
+#     Construye la URL absoluta del archivo si existe.
+#     """
+#     if not file_field:
+#         return None
+
+#     try:
+#         return request.build_absolute_uri(file_field.url)
+#     except Exception:
+#         return None
+
+
+# def _serialize_medication(m, request=None):
+#     """
+#     Serialización administrativa completa.
+#     """
 #     return {
 #         "id": m.id,
 #         "name": m.nombre,
+#         "image_url": _build_media_url(request, m.imagen) if request else None,
 #         "pharmaceutical_form": {
 #             "id": m.forma.id,
 #             "name": m.forma.nombre,
@@ -78,17 +96,15 @@
 #         "updated_at": m.actualizado_en.isoformat() if m.actualizado_en else None,
 #     }
 
-# def _serialize_catalog_medication(m):
+
+# def _serialize_catalog_medication(m, request=None):
 #     """
 #     Serialización read-only para consulta comercial/pública.
-#     Esta respuesta la consumen:
-#     - buscador del cliente
-#     - buscador de admin/farmaceuta
-#     - ProductShowPage
 #     """
 #     return {
 #         "id": m.id,
 #         "name": m.nombre,
+#         "image_url": _build_media_url(request, m.imagen) if request else None,
 #         "pharmaceutical_form": {
 #             "id": m.forma.id,
 #             "name": m.forma.nombre,
@@ -129,58 +145,21 @@
 #     }
 
 
-# def _build_name_suggestions(queryset, raw_query, limit=5):
-#     """
-#     Construye sugerencias cuando no existe coincidencia exacta.
-#     Regla del RQ:
-#     - si el nombre difiere en 1 o 2 letras
-#     - mostrar sugerencias
-#     """
-#     normalized_query = (raw_query or "").strip().lower()
-
-#     if not normalized_query:
-#         return []
-
-#     suggestions = []
-
-#     for item in queryset:
-#         candidate_name = (item.nombre or "").strip().lower()
-
-#         # Diferencia aproximada por longitud
-#         length_diff = abs(len(candidate_name) - len(normalized_query))
-
-#         # Ratio de similitud
-#         similarity = SequenceMatcher(None, normalized_query, candidate_name).ratio()
-
-#         # Regla flexible:
-#         # - diferencia corta o
-#         # - alta similitud textual
-#         if length_diff <= 2 or similarity >= 0.75:
-#             suggestions.append((similarity, item))
-
-#     # Ordenamos por mayor similitud
-#     suggestions.sort(key=lambda pair: pair[0], reverse=True)
-
-#     # Retornamos solo los medicamentos serializados
-#     return [_serialize_catalog_medication(item) for _, item in suggestions[:limit]]
-
 # def _serialize_catalog_item(item):
 #     return {
 #         "id": getattr(item, "id", None),
 #         "name": getattr(item, "nombre", None),
 #     }
 
-# def _serialize_public_medication_search_item(medication):
+
+# def _serialize_public_medication_search_item(medication, request=None):
 #     """
 #     Serializa un medicamento para resultados de búsqueda pública/comercial.
-#     Este formato es más liviano que el administrativo y sirve para:
-#     - autocompletado del navbar
-#     - resultados públicos
-#     - detalle comercial
 #     """
 #     return {
 #         "id": medication.id,
 #         "name": medication.nombre,
+#         "image_url": _build_media_url(request, medication.imagen) if request else None,
 #         "presentation": medication.presentacion.nombre if medication.presentacion else "",
 #         "concentration": medication.concentracion or "",
 #         "laboratory": medication.laboratorio.nombre if medication.laboratorio else "",
@@ -192,12 +171,33 @@
 #     }
 
 
+# def _build_name_suggestions(queryset, raw_query, request=None, limit=5):
+#     """
+#     Construye sugerencias cuando no existe coincidencia exacta.
+#     """
+#     normalized_query = (raw_query or "").strip().lower()
+
+#     if not normalized_query:
+#         return []
+
+#     suggestions = []
+
+#     for item in queryset:
+#         candidate_name = (item.nombre or "").strip().lower()
+#         length_diff = abs(len(candidate_name) - len(normalized_query))
+#         similarity = SequenceMatcher(None, normalized_query, candidate_name).ratio()
+
+#         if length_diff <= 2 or similarity >= 0.75:
+#             suggestions.append((similarity, item))
+
+#     suggestions.sort(key=lambda pair: pair[0], reverse=True)
+
+#     return [_serialize_catalog_medication(item, request=request) for _, item in suggestions[:limit]]
+
+
 # def _build_medication_suggestions(query, queryset, limit=5):
 #     """
 #     Construye sugerencias por similitud de nombre.
-#     Regla funcional:
-#     - si el nombre difiere por 1 o 2 letras aproximadamente,
-#       se devuelve como sugerencia
 #     """
 #     query_normalized = (query or "").strip().lower()
 #     suggestions = []
@@ -207,17 +207,8 @@
 
 #     for medication in queryset:
 #         medication_name = (medication.nombre or "").strip().lower()
+#         similarity_ratio = SequenceMatcher(None, query_normalized, medication_name).ratio()
 
-#         # Similitud textual simple
-#         similarity_ratio = SequenceMatcher(
-#             None,
-#             query_normalized,
-#             medication_name
-#         ).ratio()
-
-#         # Heurística práctica:
-#         # - ratio alto
-#         # - y diferencia de longitud razonable
 #         if similarity_ratio >= 0.75:
 #             suggestions.append({
 #                 "id": medication.id,
@@ -233,6 +224,9 @@
 # @api_view(["GET", "POST"])
 # @permission_classes([IsAuthenticated])
 # def medications_resource(request):
+#     """
+#     Recurso administrativo de medicamentos.
+#     """
 #     if not _is_admin(request.user):
 #         return Response(
 #             {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
@@ -280,7 +274,7 @@
 
 #         return Response({
 #             "data": {
-#                 "results": [_serialize_medication(item) for item in page_obj],
+#                 "results": [_serialize_medication(item, request=request) for item in page_obj],
 #                 "pagination": {
 #                     "count": paginator.count,
 #                     "num_pages": paginator.num_pages,
@@ -299,7 +293,10 @@
 #             "message": "Medications retrieved successfully."
 #         })
 
-#     form = CrearMedicamentoForm(request.data)
+#     # Importante:
+#     # Para ImageField hay que pasar request.FILES al form.
+#     form = CrearMedicamentoForm(request.data, request.FILES)
+
 #     if form.is_valid():
 #         medication = form.save(commit=False)
 #         medication.creado_por = request.user
@@ -317,7 +314,7 @@
 #         return Response(
 #             {
 #                 "data": {
-#                     "medication": _serialize_medication(medication)
+#                     "medication": _serialize_medication(medication, request=request)
 #                 },
 #                 "message": "Medication created successfully."
 #             },
@@ -339,6 +336,9 @@
 # @api_view(["GET", "PUT"])
 # @permission_classes([IsAuthenticated])
 # def medication_detail_resource(request, medication_id):
+#     """
+#     Detalle administrativo de medicamento.
+#     """
 #     if not _is_admin(request.user):
 #         return Response(
 #             {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
@@ -362,12 +362,15 @@
 #     if request.method == "GET":
 #         return Response({
 #             "data": {
-#                 "medication": _serialize_medication(medication)
+#                 "medication": _serialize_medication(medication, request=request)
 #             },
 #             "message": "Medication retrieved successfully."
 #         })
 
-#     form = ActualizarMedicamentoForm(request.data, instance=medication)
+#     # Importante:
+#     # Para actualización con imagen también se debe pasar request.FILES.
+#     form = ActualizarMedicamentoForm(request.data, request.FILES, instance=medication)
+
 #     if form.is_valid():
 #         updated = form.save(commit=False)
 #         updated.laboratorio_texto = updated.laboratorio.nombre if updated.laboratorio else None
@@ -382,7 +385,7 @@
 
 #         return Response({
 #             "data": {
-#                 "medication": _serialize_medication(updated)
+#                 "medication": _serialize_medication(updated, request=request)
 #             },
 #             "message": "Medication updated successfully."
 #         })
@@ -402,6 +405,9 @@
 # @api_view(["PATCH"])
 # @permission_classes([IsAuthenticated])
 # def medication_status_resource(request, medication_id):
+#     """
+#     Cambio de estado administrativo.
+#     """
 #     if not _is_admin(request.user):
 #         return Response(
 #             {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
@@ -449,7 +455,7 @@
 
 #     return Response({
 #         "data": {
-#             "medication": _serialize_medication(medication)
+#             "medication": _serialize_medication(medication, request=request)
 #         },
 #         "message": "Medication status updated successfully."
 #     })
@@ -557,17 +563,12 @@
 #         "message": "Suppliers retrieved successfully."
 #     })
 
+
 # @api_view(["GET"])
 # @permission_classes([AllowAny])
 # def catalog_medications_resource(request):
 #     """
 #     Recurso de consulta read-only de medicamentos.
-
-#     Casos soportados:
-#     - búsqueda por id exacto -> ?id=12
-#     - búsqueda por nombre exacto -> ?query=Acetaminofen
-#     - búsqueda aproximada -> retorna sugerencias
-#     - búsqueda vacía -> lista paginada básica
 #     """
 #     queryset = Medicamento.objects.select_related(
 #         "forma",
@@ -583,9 +584,6 @@
 #     page = int(request.GET.get("page", 1))
 #     page_size = int(request.GET.get("page_size", 10))
 
-#     # =========================
-#     # BÚSQUEDA POR ID EXACTO
-#     # =========================
 #     if raw_id:
 #         if not raw_id.isdigit():
 #             return Response(
@@ -619,8 +617,8 @@
 #         return Response(
 #             {
 #                 "data": {
-#                     "exact_match": _serialize_catalog_medication(medication),
-#                     "results": [_serialize_catalog_medication(medication)],
+#                     "exact_match": _serialize_catalog_medication(medication, request=request),
+#                     "results": [_serialize_catalog_medication(medication, request=request)],
 #                     "suggestions": [],
 #                 },
 #                 "message": "Medication retrieved successfully."
@@ -628,9 +626,6 @@
 #             status=status.HTTP_200_OK,
 #         )
 
-#     # =========================
-#     # BÚSQUEDA POR NOMBRE
-#     # =========================
 #     if raw_query:
 #         exact_match = queryset.filter(nombre__iexact=raw_query).first()
 
@@ -638,8 +633,8 @@
 #             return Response(
 #                 {
 #                     "data": {
-#                         "exact_match": _serialize_catalog_medication(exact_match),
-#                         "results": [_serialize_catalog_medication(exact_match)],
+#                         "exact_match": _serialize_catalog_medication(exact_match, request=request),
+#                         "results": [_serialize_catalog_medication(exact_match, request=request)],
 #                         "suggestions": [],
 #                     },
 #                     "message": "Medication retrieved successfully."
@@ -648,13 +643,13 @@
 #             )
 
 #         partial_results = queryset.filter(nombre__icontains=raw_query)[:10]
-#         suggestions = _build_name_suggestions(queryset, raw_query)
+#         suggestions = _build_name_suggestions(queryset, raw_query, request=request)
 
 #         return Response(
 #             {
 #                 "data": {
 #                     "exact_match": None,
-#                     "results": [_serialize_catalog_medication(item) for item in partial_results],
+#                     "results": [_serialize_catalog_medication(item, request=request) for item in partial_results],
 #                     "suggestions": suggestions,
 #                 },
 #                 "message": "Medication search completed."
@@ -662,9 +657,6 @@
 #             status=status.HTTP_200_OK,
 #         )
 
-#     # =========================
-#     # LISTADO BÁSICO SIN FILTRO
-#     # =========================
 #     paginator = Paginator(queryset, page_size)
 #     page_obj = paginator.get_page(page)
 
@@ -672,7 +664,7 @@
 #         {
 #             "data": {
 #                 "exact_match": None,
-#                 "results": [_serialize_catalog_medication(item) for item in page_obj],
+#                 "results": [_serialize_catalog_medication(item, request=request) for item in page_obj],
 #                 "suggestions": [],
 #                 "pagination": {
 #                     "count": paginator.count,
@@ -693,13 +685,7 @@
 # @permission_classes([AllowAny])
 # def catalog_medication_detail_resource(request, medication_id):
 #     """
-#     Detalle read-only de medicamento para:
-#     - cliente público
-#     - cliente autenticado
-#     - admin
-#     - farmaceuta
-
-#     No expone edición.
+#     Detalle read-only de medicamento para consulta general.
 #     """
 #     medication = get_object_or_404(
 #         Medicamento.objects.select_related(
@@ -716,29 +702,19 @@
 #     return Response(
 #         {
 #             "data": {
-#                 "medication": _serialize_catalog_medication(medication)
+#                 "medication": _serialize_catalog_medication(medication, request=request)
 #             },
 #             "message": "Catalog medication retrieved successfully."
 #         },
 #         status=status.HTTP_200_OK,
 #     )
 
+
 # @api_view(["GET"])
 # @permission_classes([AllowAny])
 # def public_medications_search_resource(request):
 #     """
 #     Búsqueda pública/comercial de medicamentos.
-
-#     Este endpoint sirve para:
-#     - cliente sin login
-#     - cliente con login
-#     - admin/farmaceuta desde navbar
-#     - autocompletado del buscador
-#     - búsqueda por id o por nombre
-
-#     Reglas:
-#     - solo se listan medicamentos en estado Activo
-#     - solo se listan medicamentos vendibles
 #     """
 #     query = (request.GET.get("query") or "").strip()
 #     medication_id = (request.GET.get("id") or "").strip()
@@ -754,9 +730,6 @@
 #         estado__nombre="Activo"
 #     ).order_by("nombre")
 
-#     # =========================
-#     # BÚSQUEDA POR ID EXACTO
-#     # =========================
 #     if medication_id:
 #         medication = queryset.filter(pk=medication_id).first()
 
@@ -764,8 +737,8 @@
 #             return Response(
 #                 {
 #                     "data": {
-#                         "exact_match": _serialize_public_medication_search_item(medication),
-#                         "top_results": [_serialize_public_medication_search_item(medication)],
+#                         "exact_match": _serialize_public_medication_search_item(medication, request=request),
+#                         "top_results": [_serialize_public_medication_search_item(medication, request=request)],
 #                         "suggestions": [],
 #                         "total_matches": 1,
 #                     },
@@ -787,9 +760,6 @@
 #             status=status.HTTP_200_OK,
 #         )
 
-#     # =========================
-#     # BÚSQUEDA POR NOMBRE/TEXTO
-#     # =========================
 #     if not query:
 #         return Response(
 #             {
@@ -814,14 +784,11 @@
 #     exact_match = queryset.filter(nombre__iexact=query).first()
 
 #     top_results = [
-#         _serialize_public_medication_search_item(item)
+#         _serialize_public_medication_search_item(item, request=request)
 #         for item in filtered_queryset[:6]
 #     ]
 
 #     suggestions = []
-
-#     # Si no hay coincidencia exacta o hay muy pocos resultados,
-#     # se intenta sugerir por similitud
 #     if not exact_match or len(top_results) < 3:
 #         suggestions = _build_medication_suggestions(
 #             query=query,
@@ -833,7 +800,7 @@
 #         {
 #             "data": {
 #                 "exact_match": (
-#                     _serialize_public_medication_search_item(exact_match)
+#                     _serialize_public_medication_search_item(exact_match, request=request)
 #                     if exact_match else None
 #                 ),
 #                 "top_results": top_results,
@@ -851,15 +818,6 @@
 # def public_medication_detail_resource(request, medication_id):
 #     """
 #     Detalle público/comercial de medicamento.
-
-#     Este endpoint lo puede consumir:
-#     - cliente sin login
-#     - cliente logueado
-#     - admin
-#     - farmaceuta
-
-#     Regla:
-#     - solo expone medicamentos activos
 #     """
 #     medication = get_object_or_404(
 #         Medicamento.objects.select_related(
@@ -879,6 +837,7 @@
 #                 "medication": {
 #                     "id": medication.id,
 #                     "name": medication.nombre,
+#                     "image_url": _build_media_url(request, medication.imagen),
 #                     "description": medication.descripcion or "",
 #                     "pharmaceutical_form": medication.forma.nombre if medication.forma else "",
 #                     "presentation": medication.presentacion.nombre if medication.presentacion else "",
@@ -903,6 +862,7 @@
 
 from difflib import SequenceMatcher
 
+from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -921,12 +881,90 @@ from .models import (
     EstadoMedicamento,
     Proveedor,
     MedicamentoHistorial,
+    ProveedorHistorial,
 )
-from .forms import CrearMedicamentoForm, ActualizarMedicamentoForm
+from .forms import (
+    CrearMedicamentoForm,
+    ActualizarMedicamentoForm,
+    CrearProveedorForm,
+)
 
 
 def _is_admin(user):
+    """
+    Valida si el usuario autenticado es Administrador.
+    """
     return getattr(user, "rol", None) == "Administrador"
+
+
+def _puede_gestionar_proveedores(user):
+    """
+    Permite gestión de proveedores a:
+    - Administrador
+    - Farmaceuta
+
+    Se consulta el rol real en BD para evitar inconsistencias
+    entre sesión y datos actuales del usuario.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return False
+
+    pk = getattr(user, "pk", None)
+    if not pk:
+        return False
+
+    rol = (
+        get_user_model()
+        .objects.filter(pk=pk)
+        .values_list("rol", flat=True)
+        .first()
+    )
+
+    if rol is None:
+        return False
+
+    return str(rol).strip().casefold() in ("administrador", "farmaceuta")
+
+
+def _forbidden_suppliers_response():
+    """
+    Respuesta estándar cuando un usuario no tiene permisos
+    para gestionar proveedores.
+    """
+    return Response(
+        {
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "You do not have permission.",
+            }
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _normalize_supplier_estado_payload(data):
+    """
+    Normaliza el estado enviado para proveedor.
+
+    Acepta:
+    - estado=Activo / Inactivo
+    - status=active / inactive
+    - otras variantes equivalentes
+    """
+    raw = (data.get("estado") or data.get("status") or "").strip()
+
+    if raw in ("Activo", "Inactivo"):
+        return raw
+
+    low = raw.casefold()
+
+    if low in ("active", "activo", "true", "1", "enabled", "habilitado"):
+        return "Activo"
+
+    if low in ("inactive", "inactivo", "false", "0", "disabled", "deshabilitado"):
+        return "Inactivo"
+
+    return None
 
 
 def _build_media_url(request, file_field):
@@ -944,7 +982,7 @@ def _build_media_url(request, file_field):
 
 def _serialize_medication(m, request=None):
     """
-    Serialización administrativa completa.
+    Serialización administrativa completa del medicamento.
     """
     return {
         "id": m.id,
@@ -1049,6 +1087,9 @@ def _serialize_catalog_medication(m, request=None):
 
 
 def _serialize_catalog_item(item):
+    """
+    Serialización genérica de catálogos simples.
+    """
     return {
         "id": getattr(item, "id", None),
         "name": getattr(item, "nombre", None),
@@ -1074,6 +1115,32 @@ def _serialize_public_medication_search_item(medication, request=None):
     }
 
 
+def _serialize_supplier_row(item):
+    """
+    Serialización estándar del proveedor.
+
+    Mantiene:
+    - id
+    - name
+    - nit
+    - status
+
+    Y además incluye campos útiles para la SPA de proveedores.
+    """
+    return {
+        "id": item.nit,
+        "name": item.nombre,
+        "nit": item.nit,
+        "status": item.estado,
+        "razon_social": item.razon_social or "",
+        "nombre_contacto": item.nombre_contacto or "",
+        "telefono_contacto": item.telefono_contacto or "",
+        "correo_contacto": item.correo_contacto or "",
+        "direccion": item.direccion or "",
+        "ciudad": item.ciudad or "",
+    }
+
+
 def _build_name_suggestions(queryset, raw_query, request=None, limit=5):
     """
     Construye sugerencias cuando no existe coincidencia exacta.
@@ -1095,7 +1162,10 @@ def _build_name_suggestions(queryset, raw_query, request=None, limit=5):
 
     suggestions.sort(key=lambda pair: pair[0], reverse=True)
 
-    return [_serialize_catalog_medication(item, request=request) for _, item in suggestions[:limit]]
+    return [
+        _serialize_catalog_medication(item, request=request)
+        for _, item in suggestions[:limit]
+    ]
 
 
 def _build_medication_suggestions(query, queryset, limit=5):
@@ -1124,6 +1194,60 @@ def _build_medication_suggestions(query, queryset, limit=5):
     return suggestions
 
 
+def _supplier_estado_change_response(request, proveedor):
+    """
+    Actualiza el estado Activo/Inactivo del proveedor y registra historial.
+    """
+    nuevo_estado = _normalize_supplier_estado_payload(request.data)
+
+    if nuevo_estado is None:
+        return Response(
+            {
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Invalid status.",
+                    "fields": {
+                        "estado": [
+                            'Debe ser "Activo" o "Inactivo" (o status active/inactive).'
+                        ]
+                    },
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    estado_anterior = proveedor.estado
+
+    if estado_anterior == nuevo_estado:
+        return Response(
+            {
+                "data": {
+                    "supplier": _serialize_supplier_row(proveedor),
+                },
+                "message": "Supplier status unchanged.",
+            }
+        )
+
+    proveedor.estado = nuevo_estado
+    proveedor.save(update_fields=["estado", "actualizado_en"])
+
+    ProveedorHistorial.objects.create(
+        proveedor=proveedor,
+        accion="CAMBIO_ESTADO",
+        usuario=request.user,
+        detalle=f"Estado: {estado_anterior} → {nuevo_estado}",
+    )
+
+    return Response(
+        {
+            "data": {
+                "supplier": _serialize_supplier_row(proveedor),
+            },
+            "message": "Supplier status updated successfully.",
+        }
+    )
+
+
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def medications_resource(request):
@@ -1132,7 +1256,12 @@ def medications_resource(request):
     """
     if not _is_admin(request.user):
         return Response(
-            {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
+            {
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You do not have permission.",
+                }
+            },
             status=status.HTTP_403_FORBIDDEN,
         )
 
@@ -1196,15 +1325,15 @@ def medications_resource(request):
             "message": "Medications retrieved successfully."
         })
 
-    # Importante:
-    # Para ImageField hay que pasar request.FILES al form.
     form = CrearMedicamentoForm(request.data, request.FILES)
 
     if form.is_valid():
         medication = form.save(commit=False)
         medication.creado_por = request.user
         medication.requiere_formula = False
-        medication.laboratorio_texto = medication.laboratorio.nombre if medication.laboratorio else None
+        medication.laboratorio_texto = (
+            medication.laboratorio.nombre if medication.laboratorio else None
+        )
         medication.save()
 
         MedicamentoHistorial.objects.create(
@@ -1244,7 +1373,12 @@ def medication_detail_resource(request, medication_id):
     """
     if not _is_admin(request.user):
         return Response(
-            {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
+            {
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You do not have permission.",
+                }
+            },
             status=status.HTTP_403_FORBIDDEN,
         )
 
@@ -1270,8 +1404,6 @@ def medication_detail_resource(request, medication_id):
             "message": "Medication retrieved successfully."
         })
 
-    # Importante:
-    # Para actualización con imagen también se debe pasar request.FILES.
     form = ActualizarMedicamentoForm(request.data, request.FILES, instance=medication)
 
     if form.is_valid():
@@ -1313,11 +1445,19 @@ def medication_status_resource(request, medication_id):
     """
     if not _is_admin(request.user):
         return Response(
-            {"error": {"code": "FORBIDDEN", "message": "You do not have permission."}},
+            {
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You do not have permission.",
+                }
+            },
             status=status.HTTP_403_FORBIDDEN,
         )
 
-    medication = get_object_or_404(Medicamento.objects.select_related("estado"), pk=medication_id)
+    medication = get_object_or_404(
+        Medicamento.objects.select_related("estado"),
+        pk=medication_id
+    )
     status_id = request.data.get("status_id")
 
     if not status_id:
@@ -1440,31 +1580,128 @@ def medication_statuses_catalog(request):
     })
 
 
-@api_view(["GET"])
+@api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def suppliers_catalog(request):
-    queryset = Proveedor.objects.all().order_by("nombre")
-    supplier_status = (request.GET.get("status") or "").strip()
+    """
+    GET: listado de proveedores.
+    POST: creación de proveedor por Administrador o Farmaceuta.
+    """
+    if request.method == "GET":
+        queryset = Proveedor.objects.all().order_by("nombre")
+        supplier_status = (request.GET.get("status") or "").strip()
 
-    if supplier_status:
-        queryset = queryset.filter(estado=supplier_status)
+        if supplier_status:
+            queryset = queryset.filter(estado=supplier_status)
 
-    results = [
+        results = [_serialize_supplier_row(item) for item in queryset]
+
+        return Response({
+            "data": {
+                "results": results
+            },
+            "message": "Suppliers retrieved successfully."
+        })
+
+    if not _puede_gestionar_proveedores(request.user):
+        return _forbidden_suppliers_response()
+
+    form = CrearProveedorForm(request.data)
+
+    if form.is_valid():
+        proveedor = form.save(commit=False)
+        proveedor.creado_por = request.user
+        proveedor.full_clean()
+        proveedor.save()
+
+        ProveedorHistorial.objects.create(
+            proveedor=proveedor,
+            accion="CREADO",
+            usuario=request.user,
+            detalle="Proveedor creado desde API (SPA).",
+        )
+
+        return Response(
+            {
+                "data": {
+                    "supplier": _serialize_supplier_row(proveedor),
+                },
+                "message": "Supplier created successfully.",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    return Response(
         {
-            "id": item.nit,
-            "name": item.nombre,
-            "nit": item.nit,
-            "status": item.estado,
-        }
-        for item in queryset
-    ]
-
-    return Response({
-        "data": {
-            "results": results
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Please correct the highlighted fields.",
+                "fields": form.errors,
+            }
         },
-        "message": "Suppliers retrieved successfully."
-    })
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def supplier_detail_resource(request, supplier_nit):
+    """
+    GET: detalle por NIT.
+    PATCH: permite cambio de estado también desde la ruta del recurso.
+    """
+    proveedor = Proveedor.objects.filter(pk=supplier_nit).first()
+
+    if not proveedor:
+        return Response(
+            {
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Supplier not found.",
+                    "fields": {},
+                }
+            },
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if request.method == "GET":
+        return Response({
+            "data": {
+                "supplier": _serialize_supplier_row(proveedor),
+            },
+            "message": "Supplier retrieved successfully.",
+        })
+
+    if not _puede_gestionar_proveedores(request.user):
+        return _forbidden_suppliers_response()
+
+    return _supplier_estado_change_response(request, proveedor)
+
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def supplier_status_resource(request, supplier_nit):
+    """
+    Cambio de estado Activo/Inactivo del proveedor.
+    """
+    if not _puede_gestionar_proveedores(request.user):
+        return _forbidden_suppliers_response()
+
+    proveedor = Proveedor.objects.filter(pk=supplier_nit).first()
+
+    if not proveedor:
+        return Response(
+            {
+                "error": {
+                    "code": "NOT_FOUND",
+                    "message": "Supplier not found.",
+                    "fields": {},
+                }
+            },
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    return _supplier_estado_change_response(request, proveedor)
 
 
 @api_view(["GET"])
@@ -1552,7 +1789,10 @@ def catalog_medications_resource(request):
             {
                 "data": {
                     "exact_match": None,
-                    "results": [_serialize_catalog_medication(item, request=request) for item in partial_results],
+                    "results": [
+                        _serialize_catalog_medication(item, request=request)
+                        for item in partial_results
+                    ],
                     "suggestions": suggestions,
                 },
                 "message": "Medication search completed."
@@ -1567,7 +1807,10 @@ def catalog_medications_resource(request):
         {
             "data": {
                 "exact_match": None,
-                "results": [_serialize_catalog_medication(item, request=request) for item in page_obj],
+                "results": [
+                    _serialize_catalog_medication(item, request=request)
+                    for item in page_obj
+                ],
                 "suggestions": [],
                 "pagination": {
                     "count": paginator.count,
@@ -1640,8 +1883,14 @@ def public_medications_search_resource(request):
             return Response(
                 {
                     "data": {
-                        "exact_match": _serialize_public_medication_search_item(medication, request=request),
-                        "top_results": [_serialize_public_medication_search_item(medication, request=request)],
+                        "exact_match": _serialize_public_medication_search_item(
+                            medication,
+                            request=request
+                        ),
+                        "top_results": [_serialize_public_medication_search_item(
+                            medication,
+                            request=request
+                        )],
                         "suggestions": [],
                         "total_matches": 1,
                     },
@@ -1742,11 +1991,20 @@ def public_medication_detail_resource(request, medication_id):
                     "name": medication.nombre,
                     "image_url": _build_media_url(request, medication.imagen),
                     "description": medication.descripcion or "",
-                    "pharmaceutical_form": medication.forma.nombre if medication.forma else "",
-                    "presentation": medication.presentacion.nombre if medication.presentacion else "",
+                    "pharmaceutical_form": (
+                        medication.forma.nombre if medication.forma else ""
+                    ),
+                    "presentation": (
+                        medication.presentacion.nombre if medication.presentacion else ""
+                    ),
                     "concentration": medication.concentracion or "",
-                    "administration_route": medication.via_administracion.nombre if medication.via_administracion else "",
-                    "laboratory": medication.laboratorio.nombre if medication.laboratorio else "",
+                    "administration_route": (
+                        medication.via_administracion.nombre
+                        if medication.via_administracion else ""
+                    ),
+                    "laboratory": (
+                        medication.laboratorio.nombre if medication.laboratorio else ""
+                    ),
                     "batch": medication.lote or "",
                     "expiration_date": (
                         medication.fecha_vencimiento.isoformat()
