@@ -260,7 +260,9 @@ def users_resource(request):
         return Response({
             "data": {
                 "results": [
-                    serialize_user_for_profile(item, viewer_is_admin=True)
+                    serialize_user_for_profile(
+                        item, viewer_is_admin=True, request=request
+                    )
                     for item in page_obj
                 ],
                 "pagination": {
@@ -336,7 +338,9 @@ def users_resource(request):
     return Response(
         {
             "data": {
-                "user": serialize_user_for_profile(user, viewer_is_admin=True)
+                "user": serialize_user_for_profile(
+                    user, viewer_is_admin=True, request=request
+                )
             },
             "message": "User created successfully."
         },
@@ -353,7 +357,9 @@ def user_me_profile_resource(request):
     Útil para la página de perfil sin conocer el id por delante (FFARMA02).
     """
     u = request.user
-    payload = serialize_user_for_profile(u, viewer_is_admin=_is_admin(u))
+    payload = serialize_user_for_profile(
+        u, viewer_is_admin=_is_admin(u), request=request
+    )
     return Response(
         {
             "data": {
@@ -389,6 +395,7 @@ def user_detail_resource(request, user_id):
                     "user": serialize_user_for_profile(
                         target_user,
                         viewer_is_admin=viewer_admin,
+                        request=request,
                     ),
                     "meta": _profile_response_meta(request.user, target_user),
                 },
@@ -517,7 +524,9 @@ def user_detail_resource(request, user_id):
     return Response(
         {
             "data": {
-                "user": serialize_user_for_profile(user, viewer_is_admin=True)
+                "user": serialize_user_for_profile(
+                    user, viewer_is_admin=True, request=request
+                )
             },
             "message": "Cuenta actualizada exitosamente",
         },
@@ -591,7 +600,9 @@ def user_status_resource(request, user_id):
 
     return Response({
         "data": {
-            "user": serialize_user_for_profile(target_user, viewer_is_admin=True)
+            "user": serialize_user_for_profile(
+                target_user, viewer_is_admin=True, request=request
+            )
         },
         "message": "User status updated successfully."
     })

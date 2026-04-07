@@ -23,10 +23,10 @@ password_reset_token_generator = PasswordResetTokenGenerator()
 """
 Serializa el usuario autenticado al formato esperado por el frontend.
 """
-def _serialize_session_user(user):
+def _serialize_session_user(request, user):
     """Usuario en sesión: mismas reglas de visibilidad que el perfil (FFARMA02)."""
     admin = getattr(user, "rol", None) == "Administrador"
-    return serialize_user_for_profile(user, viewer_is_admin=admin)
+    return serialize_user_for_profile(user, viewer_is_admin=admin, request=request)
 
 
 def _get_user_from_uid(uidb64):
@@ -119,7 +119,7 @@ def session_resource_view(request):
         return Response(
             {
                 "data": {
-                    "user": _serialize_session_user(request.user)
+                    "user": _serialize_session_user(request, request.user)
                 },
                 "message": "Session retrieved successfully."
             },
@@ -197,7 +197,7 @@ def session_resource_view(request):
         return Response(
             {
                 "data": {
-                    "user": _serialize_session_user(user)
+                    "user": _serialize_session_user(request, user)
                 },
                 "message": "Session created successfully."
             },
