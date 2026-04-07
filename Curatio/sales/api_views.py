@@ -1,1193 +1,3 @@
-# from decimal import Decimal, InvalidOperation
-# from io import BytesIO
-
-# from django.conf import settings
-# from django.core.mail import send_mail
-# from django.db import transaction
-# from django.http import HttpResponse
-# from django.shortcuts import get_object_or_404
-# from django.utils import timezone
-
-# from openpyxl import Workbook
-# from reportlab.lib import colors
-# from reportlab.lib.pagesizes import A4, landscape
-# from reportlab.lib.styles import getSampleStyleSheet
-# from reportlab.lib.units import mm
-# from reportlab.lib.pdfencrypt import StandardEncryption
-# from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-
-# from rest_framework import status
-# from rest_framework.decorators import api_view, permission_classes
-# from rest_framework.permissions import IsAuthenticated
-# from rest_framework.response import Response
-
-# from accounts.models import User
-# from products.models import Medicamento
-
-# from .models import Venta, VentaLinea, VentaHistorial
-# from .utils import construir_cuerpo_correo_venta
-
-
-# # =========================
-# # HELPERS DE PERMISOS
-# # =========================
-
-# def _usuario_puede_vender(user):
-#     """
-#     Valida si el usuario autenticado puede realizar operaciones
-#     administrativas sobre ventas.
-
-#     Roles permitidos:
-#     - Administrador
-#     - Farmaceuta
-#     """
-#     return getattr(user, "is_authenticated", False) and getattr(user, "rol", None) in (
-#         "Administrador",
-#         "Farmaceuta",
-#     )
-
-
-# def _forbidden_sales_response():
-#     """
-#     Respuesta estándar para operaciones no autorizadas en el módulo de ventas.
-#     """
-#     return Response(
-#         {
-#             "error": {
-#                 "code": "FORBIDDEN",
-#                 "message": "You do not have permission.",
-#             }
-#         },
-#         status=status.HTTP_403_FORBIDDEN,
-#     )
-
-
-# def _puede_ver_venta(user, venta):
-#     """
-#     Reglas de visibilidad:
-
-#     - Administrador: puede ver todas las ventas.
-#     - Farmaceuta: solo las ventas registradas por él.
-#     - Cliente: solo las ventas donde él es el cliente.
-#     """
-#     rol = getattr(user, "rol", None)
-
-#     if rol == "Administrador":
-#         return True
-
-#     if rol == "Farmaceuta" and venta.vendedor_id == user.id:
-#         return True
-
-#     if rol == "Cliente" and venta.cliente_id == user.id:
-#         return True
-
-#     return False
-
-
-# # =========================
-# # HELPERS DE VALIDACIÓN
-# # =========================
-
-# def _parse_decimal(value, field_name, required=True):
-#     """
-#     Convierte un valor recibido desde la API a Decimal con dos decimales.
-
-#     Reglas:
-#     - Si el campo es obligatorio, no puede venir vacío.
-#     - No se permiten valores negativos.
-#     """
-#     raw = str(value).strip() if value is not None else ""
-
-#     if raw == "":
-#         if required:
-#             raise ValueError({field_name: ["This field is required."]})
-#         return Decimal("0.00")
-
-#     try:
-#         number = Decimal(raw).quantize(Decimal("0.01"))
-#     except (InvalidOperation, TypeError, ValueError):
-#         raise ValueError({field_name: ["Enter a valid decimal number."]})
-
-#     if number < 0:
-#         raise ValueError({field_name: ["Negative values are not allowed."]})
-
-#     return number
-
-
-# def _validate_sale_lines(lines):
-#     """
-#     Valida y normaliza las líneas de venta recibidas desde la SPA.
-
-#     Estructura esperada por línea:
-#     {
-#         "medication_id": 123,
-#         "quantity": 2
-#     }
-
-#     Reglas aplicadas:
-#     - Debe existir al menos una línea válida.
-#     - El medicamento debe existir.
-#     - El medicamento debe estar disponible para venta.
-#     - La cantidad debe ser positiva.
-#     - La cantidad no puede superar el stock actual.
-#     """
-#     if not isinstance(lines, list) or not lines:
-#         raise ValueError({"lines": ["At least one medication line is required."]})
-
-#     normalized_lines = []
-
-#     for index, item in enumerate(lines):
-#         if not isinstance(item, dict):
-#             raise ValueError({"lines": [f"Line {index + 1} is invalid."]})
-
-#         medication_id = item.get("medication_id")
-#         quantity = item.get("quantity")
-
-#         if not medication_id:
-#             raise ValueError({"lines": [f"Line {index + 1}: medication_id is required."]})
-
-#         if not quantity:
-#             raise ValueError({"lines": [f"Line {index + 1}: quantity is required."]})
-
-#         try:
-#             quantity = int(quantity)
-#         except (TypeError, ValueError):
-#             raise ValueError({"lines": [f"Line {index + 1}: quantity must be an integer."]})
-
-#         if quantity <= 0:
-#             raise ValueError({"lines": [f"Line {index + 1}: quantity must be greater than zero."]})
-
-#         medicamento = Medicamento.objects.select_related("estado").filter(pk=medication_id).first()
-
-#         if not medicamento:
-#             raise ValueError({"lines": [f"Line {index + 1}: medication not found."]})
-
-#         if not medicamento.puede_venderse:
-#             raise ValueError(
-#                 {"lines": [f"Line {index + 1}: medication '{medicamento.nombre}' is not available for sale."]}
-#             )
-
-#         if quantity > medicamento.stock:
-#             raise ValueError(
-#                 {
-#                     "lines": [
-#                         (
-#                             f"Line {index + 1}: insufficient stock for "
-#                             f"'{medicamento.nombre}'. Available: {medicamento.stock}."
-#                         )
-#                     ]
-#                 }
-#             )
-
-#         normalized_lines.append(
-#             {
-#                 "medicamento": medicamento,
-#                 "cantidad": quantity,
-#                 "precio_unitario": medicamento.precio_venta.quantize(Decimal("0.01")),
-#             }
-#         )
-
-#     return normalized_lines
-
-
-# def _expected_subtotal_from_lines(lines):
-#     """
-#     Calcula el subtotal esperado a partir de las líneas normalizadas.
-#     """
-#     subtotal = Decimal("0.00")
-
-#     for line in lines:
-#         subtotal += (line["precio_unitario"] * line["cantidad"]).quantize(Decimal("0.01"))
-
-#     return subtotal.quantize(Decimal("0.01"))
-
-
-# def _validate_payment_type(tipo_pago):
-#     """
-#     Valida que el tipo de pago exista dentro de los choices del modelo.
-#     """
-#     valid_types = {choice[0] for choice in Venta.TIPOS_PAGO}
-
-#     if tipo_pago not in valid_types:
-#         raise ValueError({"tipo_pago": ["Invalid payment type."]})
-
-#     return tipo_pago
-
-
-# def _validate_sale_status(estado):
-#     """
-#     Valida que el estado de la venta exista dentro de los choices del modelo.
-#     """
-#     valid_statuses = {choice[0] for choice in Venta.ESTADOS}
-
-#     if estado not in valid_statuses:
-#         raise ValueError({"estado": ["Invalid sale status."]})
-
-#     return estado
-
-
-# # =========================
-# # HELPERS DE SERIALIZACIÓN
-# # =========================
-
-# def _serialize_sale_line(item):
-#     """
-#     Serialización estándar de una línea de venta.
-#     """
-#     return {
-#         "id": item.id,
-#         "medication": {
-#             "id": item.medicamento.id,
-#             "name": item.medicamento.nombre,
-#         },
-#         "quantity": item.cantidad,
-#         "unit_price": str(item.precio_unitario),
-#         "line_subtotal": str(item.subtotal_linea()),
-#     }
-
-
-# def _serialize_sale_row(venta):
-#     """
-#     Serialización resumida para listados de ventas.
-#     """
-#     return {
-#         "id": venta.id,
-#         "invoice_number": venta.numero_factura,
-#         "sale_datetime": timezone.localtime(venta.fecha_hora).strftime("%Y-%m-%d %H:%M:%S"),
-#         "customer": {
-#             "id": venta.cliente.id,
-#             "name": venta.cliente.nombre,
-#             "email": venta.cliente.email,
-#         },
-#         "seller": {
-#             "id": venta.vendedor.id,
-#             "name": venta.vendedor.nombre,
-#             "email": venta.vendedor.email,
-#         },
-#         "approved_by": (
-#             {
-#                 "id": venta.confirmacion_vendedor_por.id,
-#                 "name": venta.confirmacion_vendedor_por.nombre,
-#                 "email": venta.confirmacion_vendedor_por.email,
-#             }
-#             if venta.confirmacion_vendedor_por_id
-#             else None
-#         ),
-#         "subtotal": str(venta.subtotal),
-#         "iva": str(venta.iva),
-#         "discount": str(venta.descuento),
-#         "total": str(venta.total),
-#         "payment_type": venta.tipo_pago,
-#         "status": venta.estado,
-#     }
-
-
-# def _serialize_sale_detail(venta):
-#     """
-#     Serialización completa para detalle de venta.
-#     """
-#     return {
-#         **_serialize_sale_row(venta),
-#         "lines": [_serialize_sale_line(item) for item in venta.lineas.select_related("medicamento").all()],
-#         "history": [
-#             {
-#                 "id": item.id,
-#                 "action": item.accion,
-#                 "detail": item.detalle,
-#                 "date": timezone.localtime(item.fecha).strftime("%Y-%m-%d %H:%M:%S"),
-#                 "user": {
-#                     "id": item.usuario.id,
-#                     "name": item.usuario.nombre,
-#                     "email": item.usuario.email,
-#                 },
-#             }
-#             for item in venta.historial.select_related("usuario").all()
-#         ],
-#         "seller_confirmation_at": (
-#             timezone.localtime(venta.confirmacion_vendedor_en).strftime("%Y-%m-%d %H:%M:%S")
-#             if venta.confirmacion_vendedor_en
-#             else None
-#         ),
-#         "customer_confirmation_at": (
-#             timezone.localtime(venta.confirmacion_cliente_en).strftime("%Y-%m-%d %H:%M:%S")
-#             if venta.confirmacion_cliente_en
-#             else None
-#         ),
-#     }
-
-
-# # =========================
-# # HELPERS DE REPORTES / FACTURAS
-# # =========================
-
-# def _sales_queryset_for_user(user):
-#     """
-#     Queryset base restringido por rol.
-
-#     - Administrador: todas las ventas
-#     - Farmaceuta: solo sus ventas
-#     - Cliente: solo sus ventas
-#     """
-#     queryset = Venta.objects.select_related(
-#         "cliente",
-#         "vendedor",
-#         "confirmacion_vendedor_por",
-#     ).prefetch_related(
-#         "lineas__medicamento",
-#         "historial__usuario",
-#     ).all()
-
-#     if getattr(user, "rol", None) == "Farmaceuta":
-#         queryset = queryset.filter(vendedor=user)
-#     elif getattr(user, "rol", None) == "Cliente":
-#         queryset = queryset.filter(cliente=user)
-
-#     return queryset
-
-
-# def _filter_sales_queryset(request, queryset):
-#     """
-#     Aplica filtros opcionales de listado / reporte.
-#     """
-#     invoice_number = (request.GET.get("invoice_number") or "").strip()
-#     sale_date = (request.GET.get("sale_date") or "").strip()
-#     date_from = (request.GET.get("date_from") or "").strip()
-#     date_to = (request.GET.get("date_to") or "").strip()
-#     customer = (request.GET.get("customer") or "").strip()
-#     seller = (request.GET.get("seller") or "").strip()
-#     sale_status = (request.GET.get("status") or "").strip()
-
-#     if invoice_number:
-#         queryset = queryset.filter(numero_factura__icontains=invoice_number)
-
-#     if sale_date:
-#         queryset = queryset.filter(fecha_hora__date=sale_date)
-
-#     if date_from:
-#         queryset = queryset.filter(fecha_hora__date__gte=date_from)
-
-#     if date_to:
-#         queryset = queryset.filter(fecha_hora__date__lte=date_to)
-
-#     if customer:
-#         queryset = queryset.filter(cliente__nombre__icontains=customer)
-
-#     if seller:
-#         queryset = queryset.filter(vendedor__nombre__icontains=seller)
-
-#     if sale_status:
-#         queryset = queryset.filter(estado=sale_status)
-
-#     return queryset, {
-#         "invoice_number": invoice_number,
-#         "sale_date": sale_date,
-#         "date_from": date_from,
-#         "date_to": date_to,
-#         "customer": customer,
-#         "seller": seller,
-#         "status": sale_status,
-#     }
-
-
-# def _export_sales_excel(sales, request):
-#     """
-#     Genera reporte Excel de ventas.
-#     """
-#     workbook = Workbook()
-#     worksheet = workbook.active
-#     worksheet.title = "Reporte ventas"
-
-#     generated_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M:%S")
-#     generated_by = f"{request.user.nombre} ({request.user.email})"
-
-#     worksheet.append(["Reporte de ventas - Curatio"])
-#     worksheet.append([f"Generado por: {generated_by}"])
-#     worksheet.append([f"Fecha y hora de generación: {generated_at}"])
-#     worksheet.append([])
-#     worksheet.append(
-#         [
-#             "Número de factura",
-#             "Fecha y hora",
-#             "Cliente",
-#             "Farmaceuta",
-#             "Tipo de pago",
-#             "Aprobador",
-#             "Estado",
-#             "Subtotal",
-#             "IVA",
-#             "Descuento",
-#             "Total",
-#         ]
-#     )
-
-#     for sale in sales:
-#         worksheet.append(
-#             [
-#                 sale.numero_factura,
-#                 timezone.localtime(sale.fecha_hora).strftime("%Y-%m-%d %H:%M:%S"),
-#                 sale.cliente.nombre,
-#                 sale.vendedor.nombre,
-#                 sale.get_tipo_pago_display(),
-#                 sale.confirmacion_vendedor_por.nombre if sale.confirmacion_vendedor_por_id else "-",
-#                 sale.get_estado_display(),
-#                 float(sale.subtotal),
-#                 float(sale.iva),
-#                 float(sale.descuento),
-#                 float(sale.total),
-#             ]
-#         )
-
-#     for col in ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"):
-#         worksheet.column_dimensions[col].width = 22
-
-#     output = BytesIO()
-#     workbook.save(output)
-#     output.seek(0)
-
-#     response = HttpResponse(
-#         output.getvalue(),
-#         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-#     )
-#     response["Content-Disposition"] = (
-#         f'attachment; filename="reporte_ventas_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx"'
-#     )
-#     return response
-
-
-# def _export_sales_pdf(sales, request):
-#     """
-#     Genera reporte PDF de ventas.
-#     """
-#     generated_at = timezone.localtime(timezone.now()).strftime("%Y-%m-%d %H:%M:%S")
-#     generated_by = f"{request.user.nombre} ({request.user.email})"
-
-#     output = BytesIO()
-
-#     document = SimpleDocTemplate(
-#         output,
-#         pagesize=landscape(A4),
-#         leftMargin=8 * mm,
-#         rightMargin=8 * mm,
-#         topMargin=8 * mm,
-#         bottomMargin=8 * mm,
-#         title="Reporte de ventas Curatio",
-#         author=request.user.email,
-#         encrypt=StandardEncryption(
-#             userPassword="",
-#             ownerPassword="curatio-report-owner",
-#             canPrint=1,
-#             canModify=0,
-#             canCopy=1,
-#             canAnnotate=0,
-#         ),
-#     )
-
-#     styles = getSampleStyleSheet()
-
-#     story = [
-#         Paragraph("Reporte de ventas - Curatio", styles["Title"]),
-#         Spacer(1, 4),
-#         Paragraph(f"Generado por: {generated_by}", styles["Normal"]),
-#         Paragraph(f"Fecha y hora de generación: {generated_at}", styles["Normal"]),
-#         Spacer(1, 8),
-#     ]
-
-#     data = [
-#         [
-#             "Factura",
-#             "Fecha",
-#             "Cliente",
-#             "Farmaceuta",
-#             "Tipo pago",
-#             "Aprobador",
-#             "Estado",
-#             "Subtotal",
-#             "IVA",
-#             "Descuento",
-#             "Total",
-#         ]
-#     ]
-
-#     for sale in sales:
-#         data.append(
-#             [
-#                 sale.numero_factura,
-#                 timezone.localtime(sale.fecha_hora).strftime("%Y-%m-%d %H:%M"),
-#                 sale.cliente.nombre,
-#                 sale.vendedor.nombre,
-#                 sale.get_tipo_pago_display(),
-#                 sale.confirmacion_vendedor_por.nombre if sale.confirmacion_vendedor_por_id else "-",
-#                 sale.get_estado_display(),
-#                 str(sale.subtotal),
-#                 str(sale.iva),
-#                 str(sale.descuento),
-#                 str(sale.total),
-#             ]
-#         )
-
-#     table = Table(data, repeatRows=1)
-
-#     table.setStyle(
-#         TableStyle(
-#             [
-#                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#243b63")),
-#                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-#                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-#                 ("FONTSIZE", (0, 0), (-1, -1), 8),
-#                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-#                 ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#9aa7bf")),
-#                 ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
-#             ]
-#         )
-#     )
-
-#     story.append(table)
-#     document.build(story)
-
-#     output.seek(0)
-#     response = HttpResponse(output.getvalue(), content_type="application/pdf; charset=utf-8")
-#     response["Content-Disposition"] = (
-#         f'attachment; filename="reporte_ventas_{timezone.now().strftime("%Y%m%d_%H%M%S")}.pdf"'
-#     )
-#     return response
-
-
-# def _build_sale_invoice_pdf(venta):
-#     """
-#     Genera una factura / comprobante PDF individual para una venta.
-#     """
-#     output = BytesIO()
-
-#     document = SimpleDocTemplate(
-#         output,
-#         pagesize=A4,
-#         leftMargin=14 * mm,
-#         rightMargin=14 * mm,
-#         topMargin=14 * mm,
-#         bottomMargin=14 * mm,
-#         title=f"Factura {venta.numero_factura}",
-#         author="Curatio",
-#         encrypt=StandardEncryption(
-#             userPassword="",
-#             ownerPassword="curatio-invoice-owner",
-#             canPrint=1,
-#             canModify=0,
-#             canCopy=1,
-#             canAnnotate=0,
-#         ),
-#     )
-
-#     styles = getSampleStyleSheet()
-#     story = [
-#         Paragraph("Curatio - Factura / Comprobante de venta", styles["Title"]),
-#         Spacer(1, 6),
-#         Paragraph(f"Número de factura: {venta.numero_factura}", styles["Normal"]),
-#         Paragraph(
-#             f"Fecha y hora: {timezone.localtime(venta.fecha_hora).strftime('%Y-%m-%d %H:%M:%S')}",
-#             styles["Normal"],
-#         ),
-#         Paragraph(f"Cliente: {venta.cliente.nombre}", styles["Normal"]),
-#         Paragraph(f"Correo cliente: {venta.cliente.email}", styles["Normal"]),
-#         Paragraph(f"Usuario vendedor: {venta.vendedor.nombre}", styles["Normal"]),
-#         Paragraph(f"Tipo de pago: {venta.get_tipo_pago_display()}", styles["Normal"]),
-#         Paragraph(f"Estado: {venta.get_estado_display()}", styles["Normal"]),
-#         Spacer(1, 10),
-#     ]
-
-#     data = [["Medicamento", "Cantidad", "Precio unitario", "Subtotal línea"]]
-
-#     for line in venta.lineas.select_related("medicamento").all():
-#         data.append(
-#             [
-#                 line.medicamento.nombre,
-#                 str(line.cantidad),
-#                 str(line.precio_unitario),
-#                 str(line.subtotal_linea()),
-#             ]
-#         )
-
-#     table = Table(data, repeatRows=1)
-#     table.setStyle(
-#         TableStyle(
-#             [
-#                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#243b63")),
-#                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-#                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-#                 ("FONTSIZE", (0, 0), (-1, -1), 9),
-#                 ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-#                 ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#9aa7bf")),
-#                 ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
-#             ]
-#         )
-#     )
-
-#     story.append(table)
-#     story.append(Spacer(1, 10))
-#     story.append(Paragraph(f"Subtotal: {venta.subtotal}", styles["Normal"]))
-#     story.append(Paragraph(f"IVA: {venta.iva}", styles["Normal"]))
-#     story.append(Paragraph(f"Descuento: {venta.descuento}", styles["Normal"]))
-#     story.append(Paragraph(f"Total: {venta.total}", styles["Heading2"]))
-
-#     document.build(story)
-
-#     output.seek(0)
-#     response = HttpResponse(output.getvalue(), content_type="application/pdf; charset=utf-8")
-#     response["Content-Disposition"] = f'attachment; filename="factura_{venta.numero_factura}.pdf"'
-#     return response
-
-
-# # =========================
-# # RECURSOS API SPA
-# # =========================
-
-# @api_view(["GET", "POST"])
-# @permission_classes([IsAuthenticated])
-# def sales_resource(request):
-#     """
-#     GET: listado de ventas con filtros opcionales.
-#     POST: creación de venta desde la SPA.
-#     """
-#     if request.method == "GET":
-#         queryset = _sales_queryset_for_user(request.user)
-#         queryset, filters = _filter_sales_queryset(request, queryset)
-
-#         results = [_serialize_sale_row(item) for item in queryset]
-
-#         return Response(
-#             {
-#                 "data": {
-#                     "results": results,
-#                     "filters": filters,
-#                     "count": len(results),
-#                 },
-#                 "message": "Sales retrieved successfully.",
-#             }
-#         )
-
-#     if not _usuario_puede_vender(request.user):
-#         return _forbidden_sales_response()
-
-#     try:
-#         invoice_number = (request.data.get("invoice_number") or "").strip()
-#         customer_id = request.data.get("customer_id")
-#         payment_type = _validate_payment_type((request.data.get("payment_type") or "").strip())
-
-#         subtotal = _parse_decimal(request.data.get("subtotal"), "subtotal")
-#         iva = _parse_decimal(request.data.get("iva"), "iva")
-#         discount = _parse_decimal(request.data.get("discount"), "discount", required=False)
-#         total = _parse_decimal(request.data.get("total"), "total")
-
-#         lines = _validate_sale_lines(request.data.get("lines", []))
-
-#         if not invoice_number:
-#             return Response(
-#                 {
-#                     "error": {
-#                         "code": "VALIDATION_ERROR",
-#                         "message": "Please correct the highlighted fields.",
-#                         "fields": {"invoice_number": ["This field is required."]},
-#                     }
-#                 },
-#                 status=status.HTTP_400_BAD_REQUEST,
-#             )
-
-#         customer = User.objects.filter(
-#             pk=customer_id,
-#             rol="Cliente",
-#             estado=True,
-#             is_active=True,
-#         ).first()
-
-#         if not customer:
-#             return Response(
-#                 {
-#                     "error": {
-#                         "code": "VALIDATION_ERROR",
-#                         "message": "Please correct the highlighted fields.",
-#                         "fields": {"customer_id": ["Valid customer is required."]},
-#                     }
-#                 },
-#                 status=status.HTTP_400_BAD_REQUEST,
-#             )
-
-#         expected_subtotal = _expected_subtotal_from_lines(lines)
-#         expected_total = (subtotal + iva - discount).quantize(Decimal("0.01"))
-
-#         if subtotal != expected_subtotal:
-#             return Response(
-#                 {
-#                     "error": {
-#                         "code": "VALIDATION_ERROR",
-#                         "message": "Subtotal does not match sale lines.",
-#                         "fields": {
-#                             "subtotal": [
-#                                 f"Expected subtotal is {expected_subtotal} based on sale lines."
-#                             ]
-#                         },
-#                     }
-#                 },
-#                 status=status.HTTP_400_BAD_REQUEST,
-#             )
-
-#         if total != expected_total:
-#             return Response(
-#                 {
-#                     "error": {
-#                         "code": "VALIDATION_ERROR",
-#                         "message": "Total does not match subtotal + IVA - discount.",
-#                         "fields": {
-#                             "total": [
-#                                 f"Expected total is {expected_total}."
-#                             ]
-#                         },
-#                     }
-#                 },
-#                 status=status.HTTP_400_BAD_REQUEST,
-#             )
-
-#         with transaction.atomic():
-#             venta = Venta(
-#                 numero_factura=invoice_number,
-#                 cliente=customer,
-#                 vendedor=request.user,
-#                 subtotal=subtotal,
-#                 iva=iva,
-#                 descuento=discount,
-#                 total=total,
-#                 tipo_pago=payment_type,
-#                 estado="Pendiente",
-#             )
-#             venta.full_clean()
-#             venta.save()
-
-#             for line in lines:
-#                 sale_line = VentaLinea(
-#                     venta=venta,
-#                     medicamento=line["medicamento"],
-#                     cantidad=line["cantidad"],
-#                     precio_unitario=line["precio_unitario"],
-#                 )
-#                 sale_line.full_clean()
-#                 sale_line.save()
-
-#             VentaHistorial.objects.create(
-#                 venta=venta,
-#                 accion="CREADA",
-#                 usuario=request.user,
-#                 detalle=(
-#                     f"Venta {venta.numero_factura} registrada en estado "
-#                     "Pendiente de confirmación."
-#                 ),
-#             )
-
-#         try:
-#             send_mail(
-#                 subject=f"Curatio — Detalle de venta {venta.numero_factura}",
-#                 message=construir_cuerpo_correo_venta(venta),
-#                 from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-#                 recipient_list=[venta.cliente.email],
-#                 fail_silently=False,
-#             )
-#         except Exception as exc:
-#             VentaHistorial.objects.create(
-#                 venta=venta,
-#                 accion="NOTIFICACION_CORREO_ERROR",
-#                 usuario=request.user,
-#                 detalle=f"No se pudo enviar correo al cliente: {exc}",
-#             )
-#         else:
-#             VentaHistorial.objects.create(
-#                 venta=venta,
-#                 accion="NOTIFICACION_CORREO",
-#                 usuario=request.user,
-#                 detalle="Notificación enviada al cliente.",
-#             )
-
-#         venta = Venta.objects.select_related(
-#             "cliente",
-#             "vendedor",
-#             "confirmacion_vendedor_por",
-#         ).prefetch_related("lineas__medicamento", "historial__usuario").get(pk=venta.pk)
-
-#         return Response(
-#             {
-#                 "data": {
-#                     "sale": _serialize_sale_detail(venta),
-#                 },
-#                 "message": "Sale created successfully.",
-#             },
-#             status=status.HTTP_201_CREATED,
-#         )
-
-#     except ValueError as exc:
-#         return Response(
-#             {
-#                 "error": {
-#                     "code": "VALIDATION_ERROR",
-#                     "message": "Please correct the highlighted fields.",
-#                     "fields": exc.args[0] if exc.args else {},
-#                 }
-#             },
-#             status=status.HTTP_400_BAD_REQUEST,
-#         )
-#     except Exception as exc:
-#         return Response(
-#             {
-#                 "error": {
-#                     "code": "SERVER_ERROR",
-#                     "message": str(exc),
-#                 }
-#             },
-#             status=status.HTTP_400_BAD_REQUEST,
-#         )
-
-
-# @api_view(["GET", "PATCH"])
-# @permission_classes([IsAuthenticated])
-# def sale_detail_resource(request, sale_id):
-#     """
-#     GET: detalle de una venta.
-#     PATCH: actualización de campos permitidos de una venta existente.
-
-#     Campos editables:
-#     - payment_type
-#     - status
-#     """
-#     sale = get_object_or_404(
-#         Venta.objects.select_related(
-#             "cliente",
-#             "vendedor",
-#             "confirmacion_vendedor_por",
-#             "confirmacion_cliente_por",
-#         ).prefetch_related(
-#             "lineas__medicamento",
-#             "historial__usuario",
-#         ),
-#         pk=sale_id,
-#     )
-
-#     if not _puede_ver_venta(request.user, sale):
-#         return _forbidden_sales_response()
-
-#     if request.method == "GET":
-#         return Response(
-#             {
-#                 "data": {
-#                     "sale": _serialize_sale_detail(sale),
-#                 },
-#                 "message": "Sale retrieved successfully.",
-#             }
-#         )
-
-#     if not _usuario_puede_vender(request.user):
-#         return _forbidden_sales_response()
-
-#     if request.user.rol == "Farmaceuta" and sale.vendedor_id != request.user.id:
-#         return _forbidden_sales_response()
-
-#     if sale.estado not in ("Pendiente", "Completada"):
-#         return Response(
-#             {
-#                 "error": {
-#                     "code": "INVALID_STATUS",
-#                     "message": "Only pending or completed sales can be updated.",
-#                 }
-#             },
-#             status=status.HTTP_400_BAD_REQUEST,
-#         )
-
-#     fields_changed = []
-
-#     if "payment_type" in request.data:
-#         new_payment_type = _validate_payment_type((request.data.get("payment_type") or "").strip())
-#         if sale.tipo_pago != new_payment_type:
-#             fields_changed.append(f"tipo_pago: {sale.tipo_pago} -> {new_payment_type}")
-#             sale.tipo_pago = new_payment_type
-
-#     if "status" in request.data:
-#         new_status = _validate_sale_status((request.data.get("status") or "").strip())
-#         if sale.estado != new_status:
-#             # Regla de negocio: no se permite forzar Completada por PATCH simple.
-#             # La completitud real debe pasar por confirmación de pago.
-#             if new_status == "Completada":
-#                 return Response(
-#                     {
-#                         "error": {
-#                             "code": "INVALID_STATUS_TRANSITION",
-#                             "message": "Use confirm-payment endpoint to complete the sale.",
-#                         }
-#                     },
-#                     status=status.HTTP_400_BAD_REQUEST,
-#                 )
-
-#             fields_changed.append(f"estado: {sale.estado} -> {new_status}")
-#             sale.estado = new_status
-
-#     if not fields_changed:
-#         return Response(
-#             {
-#                 "data": {
-#                     "sale": _serialize_sale_detail(sale),
-#                 },
-#                 "message": "Sale unchanged.",
-#             }
-#         )
-
-#     sale.full_clean()
-#     sale.save()
-
-#     VentaHistorial.objects.create(
-#         venta=sale,
-#         accion="ACTUALIZADA",
-#         usuario=request.user,
-#         detalle="; ".join(fields_changed),
-#     )
-
-#     return Response(
-#         {
-#             "data": {
-#                 "sale": _serialize_sale_detail(sale),
-#             },
-#             "message": "Sale updated successfully.",
-#         }
-#     )
-
-
-# @api_view(["PATCH"])
-# @permission_classes([IsAuthenticated])
-# def sale_confirm_payment_resource(request, sale_id):
-#     """
-#     Confirma el pago de una venta.
-
-#     Comportamiento implementado para SPA:
-#     - Si quien llama es ADMIN o FARMACEUTA, registra confirmación del vendedor.
-#     - Si quien llama es CLIENTE, registra confirmación del cliente.
-#     - Cuando ambas confirmaciones existen, la venta pasa a Completada
-#       y se descuenta stock.
-#     """
-#     sale = get_object_or_404(
-#         Venta.objects.select_related(
-#             "cliente",
-#             "vendedor",
-#             "confirmacion_vendedor_por",
-#             "confirmacion_cliente_por",
-#         ).prefetch_related("lineas__medicamento", "historial__usuario"),
-#         pk=sale_id,
-#     )
-
-#     if not _puede_ver_venta(request.user, sale):
-#         return _forbidden_sales_response()
-
-#     if sale.estado != "Pendiente":
-#         return Response(
-#             {
-#                 "error": {
-#                     "code": "INVALID_STATUS",
-#                     "message": "Only pending sales can be confirmed.",
-#                 }
-#             },
-#             status=status.HTTP_400_BAD_REQUEST,
-#         )
-
-#     with transaction.atomic():
-#         if request.user.rol in ("Administrador", "Farmaceuta"):
-#             if request.user.rol == "Farmaceuta" and sale.vendedor_id != request.user.id:
-#                 return _forbidden_sales_response()
-
-#             if sale.confirmacion_vendedor_en is None:
-#                 sale.confirmacion_vendedor_en = timezone.now()
-#                 sale.confirmacion_vendedor_por = request.user
-
-#                 VentaHistorial.objects.create(
-#                     venta=sale,
-#                     accion="CONFIRMACION_VENDEDOR",
-#                     usuario=request.user,
-#                     detalle="Pago confirmado por el vendedor.",
-#                 )
-
-#         elif request.user.rol == "Cliente":
-#             if sale.cliente_id != request.user.id:
-#                 return _forbidden_sales_response()
-
-#             if sale.confirmacion_cliente_en is None:
-#                 sale.confirmacion_cliente_en = timezone.now()
-#                 sale.confirmacion_cliente_por = request.user
-
-#                 VentaHistorial.objects.create(
-#                     venta=sale,
-#                     accion="CONFIRMACION_CLIENTE",
-#                     usuario=request.user,
-#                     detalle="Pago confirmado por el cliente.",
-#                 )
-
-#         else:
-#             return _forbidden_sales_response()
-
-#         sale.save()
-
-#         completed = sale.aplicar_descuento_stock_si_completa()
-
-#         if completed:
-#             VentaHistorial.objects.create(
-#                 venta=sale,
-#                 accion="COMPLETADA",
-#                 usuario=request.user,
-#                 detalle="Venta completada tras confirmación de pago.",
-#             )
-
-#     sale.refresh_from_db()
-
-#     return Response(
-#         {
-#             "data": {
-#                 "sale": _serialize_sale_detail(sale),
-#                 "completed": completed,
-#             },
-#             "message": (
-#                 "Sale completed successfully."
-#                 if completed
-#                 else "Payment confirmation registered successfully."
-#             ),
-#         }
-#     )
-
-
-# @api_view(["PATCH"])
-# @permission_classes([IsAuthenticated])
-# def sale_cancel_resource(request, sale_id):
-#     """
-#     Anula una venta pendiente o completada.
-
-#     Regla aplicada:
-#     - ADMIN puede anular cualquier venta.
-#     - FARMACEUTA solo puede anular las ventas realizadas por él.
-#     - Debe enviarse un motivo / observación.
-#     """
-#     sale = get_object_or_404(
-#         Venta.objects.select_related(
-#             "cliente",
-#             "vendedor",
-#             "confirmacion_vendedor_por",
-#         ).prefetch_related("lineas__medicamento", "historial__usuario"),
-#         pk=sale_id,
-#     )
-
-#     if not _usuario_puede_vender(request.user):
-#         return _forbidden_sales_response()
-
-#     if request.user.rol == "Farmaceuta" and sale.vendedor_id != request.user.id:
-#         return _forbidden_sales_response()
-
-#     if sale.estado not in ("Pendiente", "Completada"):
-#         return Response(
-#             {
-#                 "error": {
-#                     "code": "INVALID_STATUS",
-#                     "message": "Only pending or completed sales can be cancelled.",
-#                 }
-#             },
-#             status=status.HTTP_400_BAD_REQUEST,
-#         )
-
-#     reason = (request.data.get("reason") or "").strip()
-
-#     if not reason:
-#         return Response(
-#             {
-#                 "error": {
-#                     "code": "VALIDATION_ERROR",
-#                     "message": "Cancellation reason is required.",
-#                     "fields": {"reason": ["This field is required."]},
-#                 }
-#             },
-#             status=status.HTTP_400_BAD_REQUEST,
-#         )
-
-#     previous_status = sale.estado
-#     sale.estado = "Anulada"
-#     sale.save(update_fields=["estado"])
-
-#     VentaHistorial.objects.create(
-#         venta=sale,
-#         accion="ANULADA",
-#         usuario=request.user,
-#         detalle=f"Venta anulada. Estado anterior: {previous_status}. Motivo: {reason}",
-#     )
-
-#     sale.refresh_from_db()
-
-#     return Response(
-#         {
-#             "data": {
-#                 "sale": _serialize_sale_detail(sale),
-#             },
-#             "message": "Sale cancelled successfully.",
-#         }
-#     )
-
-
-# @api_view(["GET"])
-# @permission_classes([IsAuthenticated])
-# def sales_report_resource(request):
-#     """
-#     Exporta reporte de ventas filtrado en Excel o PDF.
-#     """
-#     if not _usuario_puede_vender(request.user):
-#         return _forbidden_sales_response()
-
-#     queryset = _sales_queryset_for_user(request.user)
-#     queryset, _filters = _filter_sales_queryset(request, queryset)
-
-#     if not queryset.exists():
-#         return Response(
-#             {
-#                 "error": {
-#                     "code": "NO_RESULTS",
-#                     "message": "No sales found for the selected filters.",
-#                 }
-#             },
-#             status=status.HTTP_404_NOT_FOUND,
-#         )
-
-#     report_format = (request.GET.get("format") or "").strip().lower()
-
-#     if report_format == "excel":
-#         return _export_sales_excel(queryset, request)
-
-#     if report_format == "pdf":
-#         return _export_sales_pdf(queryset, request)
-
-#     return Response(
-#         {
-#             "error": {
-#                 "code": "VALIDATION_ERROR",
-#                 "message": "Invalid report format. Use excel or pdf.",
-#             }
-#         },
-#         status=status.HTTP_400_BAD_REQUEST,
-#     )
-
-
-# @api_view(["GET"])
-# @permission_classes([IsAuthenticated])
-# def sale_invoice_resource(request, sale_id):
-#     """
-#     Descarga factura / comprobante individual de una venta.
-#     """
-#     sale = get_object_or_404(
-#         Venta.objects.select_related(
-#             "cliente",
-#             "vendedor",
-#             "confirmacion_vendedor_por",
-#         ).prefetch_related("lineas__medicamento"),
-#         pk=sale_id,
-#     )
-
-#     if not _puede_ver_venta(request.user, sale):
-#         return _forbidden_sales_response()
-
-#     return _build_sale_invoice_pdf(sale)
-
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 
@@ -1219,7 +29,8 @@ from .utils import construir_cuerpo_correo_venta
 from reportlab.graphics.barcode import qr
 from reportlab.graphics.shapes import Drawing
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-
+from .models import Venta, VentaLinea, VentaHistorial, NotificacionVenta
+import traceback
 
 # =========================
 # HELPERS DE PERMISOS
@@ -1306,6 +117,144 @@ def _parse_decimal(value, field_name, required=True):
         raise ValueError({field_name: ["Negative values are not allowed."]})
 
     return number
+
+def _usuarios_internos_notificables():
+    """
+    Retorna usuarios internos que deben recibir notificaciones operativas.
+
+    En esta fase:
+    - Administrador
+    - Farmaceuta
+    """
+    return User.objects.filter(
+        rol__in=["Administrador", "Farmaceuta"],
+        estado=True,
+        is_active=True,
+    ).order_by("id")
+
+
+def _serialize_notification_row(item):
+    """
+    Serialización estándar de notificación interna.
+    """
+    return {
+        "id": item.id,
+        "type": item.tipo,
+        "title": item.titulo,
+        "message": item.mensaje,
+        "is_read": item.leida,
+        "created_at": timezone.localtime(item.creada_en).strftime("%Y-%m-%d %H:%M:%S"),
+        "read_at": (
+            timezone.localtime(item.leida_en).strftime("%Y-%m-%d %H:%M:%S")
+            if item.leida_en else None
+        ),
+        "sale": (
+            {
+                "id": item.venta.id,
+                "invoice_number": item.venta.numero_factura,
+                "status": item.venta.estado,
+            }
+            if item.venta_id else None
+        ),
+    }
+
+
+def _crear_notificacion_interna_para_todos(venta, tipo, titulo, mensaje):
+    """
+    Crea la misma notificación para todo el personal interno autorizado.
+    """
+    notificaciones = []
+
+    for usuario in _usuarios_internos_notificables():
+        notificaciones.append(
+            NotificacionVenta(
+                usuario=usuario,
+                venta=venta,
+                tipo=tipo,
+                titulo=titulo,
+                mensaje=mensaje,
+            )
+        )
+
+    if notificaciones:
+        NotificacionVenta.objects.bulk_create(notificaciones)
+
+
+def _crear_notificacion_para_usuario(usuario, venta, tipo, titulo, mensaje):
+    """
+    Crea una notificación individual.
+    """
+    NotificacionVenta.objects.create(
+        usuario=usuario,
+        venta=venta,
+        tipo=tipo,
+        titulo=titulo,
+        mensaje=mensaje,
+    )
+
+
+def _validar_datos_entrega_checkout(request_data):
+    """
+    Valida los datos de entrega enviados desde el checkout web.
+    """
+    delivery_method = (request_data.get("delivery_method") or "").strip()
+
+    if delivery_method not in ("delivery", "pickup"):
+        raise ValueError(
+            {"delivery_method": ["Debe seleccionar domicilio o recogida en tienda."]}
+        )
+
+    delivery_payload = {
+        "delivery_method": delivery_method,
+        "delivery_address": (request_data.get("delivery_address") or "").strip(),
+        "delivery_city": (request_data.get("delivery_city") or "").strip(),
+        "delivery_phone": (request_data.get("delivery_phone") or "").strip(),
+        "pickup_point": (request_data.get("pickup_point") or "").strip(),
+        "pickup_contact_name": (request_data.get("pickup_contact_name") or "").strip(),
+        "pickup_contact_phone": (request_data.get("pickup_contact_phone") or "").strip(),
+    }
+
+    if delivery_method == "delivery":
+        if not delivery_payload["delivery_address"]:
+            raise ValueError({"delivery_address": ["La dirección es obligatoria."]})
+        if not delivery_payload["delivery_city"]:
+            raise ValueError({"delivery_city": ["La ciudad es obligatoria."]})
+        if not delivery_payload["delivery_phone"]:
+            raise ValueError({"delivery_phone": ["El teléfono es obligatorio."]})
+
+    if delivery_method == "pickup":
+        if not delivery_payload["pickup_point"]:
+            raise ValueError({"pickup_point": ["El punto de retiro es obligatorio."]})
+        if not delivery_payload["pickup_contact_name"]:
+            raise ValueError({"pickup_contact_name": ["El nombre de contacto es obligatorio."]})
+        if not delivery_payload["pickup_contact_phone"]:
+            raise ValueError({"pickup_contact_phone": ["El teléfono de contacto es obligatorio."]})
+
+    return delivery_payload
+
+
+def _construir_mensaje_cliente_aprobacion(venta):
+    """
+    Construye el mensaje para el cliente una vez la compra es aprobada manualmente.
+
+    Reglas:
+    - domicilio -> pedido será despachado
+    - recogida -> disponible para retiro después de 45 minutos
+    """
+    if venta.metodo_entrega == "delivery":
+        return (
+            f"Hola {venta.cliente.nombre},\n\n"
+            f"Tu compra con factura {venta.numero_factura} fue aprobada correctamente.\n"
+            "Tu pedido será despachado a la dirección registrada.\n\n"
+            "Gracias por confiar en Curatio."
+        )
+
+    return (
+        f"Hola {venta.cliente.nombre},\n\n"
+        f"Tu compra con factura {venta.numero_factura} fue aprobada correctamente.\n"
+        "Tu pedido estará disponible para recogida en tienda después de 45 minutos.\n\n"
+        "Gracias por confiar en Curatio."
+    )
 
 
 def _validate_payment_type(tipo_pago):
@@ -1479,6 +428,16 @@ def _serialize_sale_row(venta):
         "total": str(venta.total),
         "payment_type": venta.tipo_pago,
         "status": venta.estado,
+        "delivery": {
+            "method": venta.metodo_entrega,
+            "method_label": venta.get_metodo_entrega_display() if venta.metodo_entrega else "",
+            "delivery_address": venta.direccion_entrega,
+            "delivery_city": venta.ciudad_entrega,
+            "delivery_phone": venta.telefono_entrega,
+            "pickup_point": venta.punto_retiro,
+            "pickup_contact_name": venta.nombre_contacto_retiro,
+            "pickup_contact_phone": venta.telefono_contacto_retiro,
+        },
     }
 
 
@@ -3288,6 +2247,240 @@ def _serialize_checkout_web_result(sale):
         "lines": [_serialize_sale_line(item) for item in sale.lineas.select_related("medicamento").all()],
     }
 
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def customer_checkout_resource(request):
+#     """
+#     Checkout web para el rol Cliente.
+
+#     Flujo:
+#     - el cliente autenticado compra para sí mismo
+#     - se valida stock y montos
+#     - se asigna automáticamente un vendedor interno
+#     - la venta se marca como completada al aprobarse el pago del checkout web
+#     - se descuenta stock usando la misma lógica del modelo
+#     """
+#     if getattr(request.user, "rol", None) != "Cliente":
+#         return Response(
+#             {
+#                 "error": {
+#                     "code": "FORBIDDEN",
+#                     "message": "Only clients can use the web checkout.",
+#                 }
+#             },
+#             status=status.HTTP_403_FORBIDDEN,
+#         )
+
+#     try:
+#         invoice_number = (request.data.get("invoice_number") or "").strip()
+#         payment_type = _validate_payment_type((request.data.get("payment_type") or "").strip())
+
+#         subtotal = _parse_decimal(request.data.get("subtotal"), "subtotal")
+#         iva = _parse_decimal(request.data.get("iva"), "iva")
+#         discount = _parse_decimal(request.data.get("discount"), "discount", required=False)
+#         total = _parse_decimal(request.data.get("total"), "total")
+
+#         lines = _validate_sale_lines(request.data.get("lines", []))
+
+#         if not invoice_number:
+#             return Response(
+#                 {
+#                     "error": {
+#                         "code": "VALIDATION_ERROR",
+#                         "message": "Please correct the highlighted fields.",
+#                         "fields": {"invoice_number": ["This field is required."]},
+#                     }
+#                 },
+#                 status=status.HTTP_400_BAD_REQUEST,
+#             )
+
+#         seller = _resolve_checkout_web_seller()
+
+#         if not seller:
+#             return Response(
+#                 {
+#                     "error": {
+#                         "code": "CONFIGURATION_ERROR",
+#                         "message": "No internal seller is available to register the checkout.",
+#                     }
+#                 },
+#                 status=status.HTTP_400_BAD_REQUEST,
+#             )
+
+#         expected_subtotal = _expected_subtotal_from_lines(lines)
+#         expected_total = (subtotal + iva - discount).quantize(Decimal("0.01"))
+
+#         if subtotal != expected_subtotal:
+#             return Response(
+#                 {
+#                     "error": {
+#                         "code": "VALIDATION_ERROR",
+#                         "message": "Subtotal does not match sale lines.",
+#                         "fields": {
+#                             "subtotal": [
+#                                 f"Expected subtotal is {expected_subtotal} based on sale lines."
+#                             ]
+#                         },
+#                     }
+#                 },
+#                 status=status.HTTP_400_BAD_REQUEST,
+#             )
+
+#         if total != expected_total:
+#             return Response(
+#                 {
+#                     "error": {
+#                         "code": "VALIDATION_ERROR",
+#                         "message": "Total does not match subtotal + IVA - discount.",
+#                         "fields": {
+#                             "total": [f"Expected total is {expected_total}."]
+#                         },
+#                     }
+#                 },
+#                 status=status.HTTP_400_BAD_REQUEST,
+#             )
+
+#         with transaction.atomic():
+#             sale = Venta(
+#                 numero_factura=invoice_number,
+#                 cliente=request.user,
+#                 vendedor=seller,
+#                 subtotal=subtotal,
+#                 iva=iva,
+#                 descuento=discount,
+#                 total=total,
+#                 tipo_pago=payment_type,
+#                 estado="Pendiente",
+#             )
+#             sale.full_clean()
+#             sale.save()
+
+#             for line in lines:
+#                 sale_line = VentaLinea(
+#                     venta=sale,
+#                     medicamento=line["medicamento"],
+#                     cantidad=line["cantidad"],
+#                     precio_unitario=line["precio_unitario"],
+#                 )
+#                 sale_line.full_clean()
+#                 sale_line.save()
+
+#             VentaHistorial.objects.create(
+#                 venta=sale,
+#                 accion="CHECKOUT_WEB_CREADO",
+#                 usuario=request.user,
+#                 detalle="Venta creada desde checkout web del cliente.",
+#             )
+
+#             # Confirmación automática del lado cliente
+#             sale.confirmacion_cliente_en = timezone.now()
+#             sale.confirmacion_cliente_por = request.user
+
+#             VentaHistorial.objects.create(
+#                 venta=sale,
+#                 accion="CONFIRMACION_CLIENTE",
+#                 usuario=request.user,
+#                 detalle="Pago confirmado desde checkout web por el cliente.",
+#             )
+
+#             # Confirmación operativa automática del lado interno
+#             sale.confirmacion_vendedor_en = timezone.now()
+#             sale.confirmacion_vendedor_por = seller
+
+#             VentaHistorial.objects.create(
+#                 venta=sale,
+#                 accion="CONFIRMACION_VENDEDOR",
+#                 usuario=seller,
+#                 detalle=(
+#                     "Confirmación operativa automática para checkout web. "
+#                     "La venta queda lista para completar."
+#                 ),
+#             )
+
+#             sale.save(
+#                 update_fields=[
+#                     "confirmacion_cliente_en",
+#                     "confirmacion_cliente_por",
+#                     "confirmacion_vendedor_en",
+#                     "confirmacion_vendedor_por",
+#                 ]
+#             )
+
+#             completed = sale.aplicar_descuento_stock_si_completa()
+
+#             if completed:
+#                 VentaHistorial.objects.create(
+#                     venta=sale,
+#                     accion="COMPLETADA",
+#                     usuario=seller,
+#                     detalle="Venta web completada y stock descontado.",
+#                 )
+
+#         try:
+#             send_mail(
+#                 subject=f"Curatio — Confirmación de compra {sale.numero_factura}",
+#                 message=construir_cuerpo_correo_venta(sale),
+#                 from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+#                 recipient_list=[sale.cliente.email],
+#                 fail_silently=False,
+#             )
+#         except Exception as exc:
+#             VentaHistorial.objects.create(
+#                 venta=sale,
+#                 accion="NOTIFICACION_CORREO_ERROR",
+#                 usuario=request.user,
+#                 detalle=f"No se pudo enviar correo al cliente: {exc}",
+#             )
+#         else:
+#             VentaHistorial.objects.create(
+#                 venta=sale,
+#                 accion="NOTIFICACION_CORREO",
+#                 usuario=request.user,
+#                 detalle="Confirmación enviada al cliente.",
+#             )
+
+#         sale = Venta.objects.select_related(
+#             "cliente",
+#             "vendedor",
+#             "confirmacion_vendedor_por",
+#             "confirmacion_cliente_por",
+#         ).prefetch_related(
+#             "lineas__medicamento",
+#             "historial__usuario",
+#         ).get(pk=sale.pk)
+
+#         return Response(
+#             {
+#                 "data": {
+#                     "checkout_sale": _serialize_checkout_web_result(sale),
+#                 },
+#                 "message": "Web checkout completed successfully.",
+#             },
+#             status=status.HTTP_201_CREATED,
+#         )
+
+#     except ValueError as exc:
+#         return Response(
+#             {
+#                 "error": {
+#                     "code": "VALIDATION_ERROR",
+#                     "message": "Please correct the highlighted fields.",
+#                     "fields": exc.args[0] if exc.args else {},
+#                 }
+#             },
+#             status=status.HTTP_400_BAD_REQUEST,
+#         )
+#     except Exception as exc:
+#         return Response(
+#             {
+#                 "error": {
+#                     "code": "SERVER_ERROR",
+#                     "message": str(exc),
+#                 }
+#             },
+#             status=status.HTTP_400_BAD_REQUEST,
+#         )
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def customer_checkout_resource(request):
@@ -3298,8 +2491,8 @@ def customer_checkout_resource(request):
     - el cliente autenticado compra para sí mismo
     - se valida stock y montos
     - se asigna automáticamente un vendedor interno
-    - la venta se marca como completada al aprobarse el pago del checkout web
-    - se descuenta stock usando la misma lógica del modelo
+    - la venta queda PENDIENTE de aprobación interna
+    - no se descuenta stock hasta que ADMIN / FARMACEUTA apruebe manualmente
     """
     if getattr(request.user, "rol", None) != "Cliente":
         return Response(
@@ -3322,6 +2515,7 @@ def customer_checkout_resource(request):
         total = _parse_decimal(request.data.get("total"), "total")
 
         lines = _validate_sale_lines(request.data.get("lines", []))
+        delivery_data = _validar_datos_entrega_checkout(request.data)
 
         if not invoice_number:
             return Response(
@@ -3392,6 +2586,13 @@ def customer_checkout_resource(request):
                 total=total,
                 tipo_pago=payment_type,
                 estado="Pendiente",
+                metodo_entrega=delivery_data["delivery_method"],
+                direccion_entrega=delivery_data["delivery_address"],
+                ciudad_entrega=delivery_data["delivery_city"],
+                telefono_entrega=delivery_data["delivery_phone"],
+                punto_retiro=delivery_data["pickup_point"],
+                nombre_contacto_retiro=delivery_data["pickup_contact_name"],
+                telefono_contacto_retiro=delivery_data["pickup_contact_phone"],
             )
             sale.full_clean()
             sale.save()
@@ -3410,12 +2611,18 @@ def customer_checkout_resource(request):
                 venta=sale,
                 accion="CHECKOUT_WEB_CREADO",
                 usuario=request.user,
-                detalle="Venta creada desde checkout web del cliente.",
+                detalle="Venta creada desde checkout web del cliente y pendiente de aprobación interna.",
             )
 
-            # Confirmación automática del lado cliente
+            # El cliente ya confirmó/pagó desde el checkout web.
             sale.confirmacion_cliente_en = timezone.now()
             sale.confirmacion_cliente_por = request.user
+            sale.save(
+                update_fields=[
+                    "confirmacion_cliente_en",
+                    "confirmacion_cliente_por",
+                ]
+            )
 
             VentaHistorial.objects.create(
                 venta=sale,
@@ -3424,42 +2631,20 @@ def customer_checkout_resource(request):
                 detalle="Pago confirmado desde checkout web por el cliente.",
             )
 
-            # Confirmación operativa automática del lado interno
-            sale.confirmacion_vendedor_en = timezone.now()
-            sale.confirmacion_vendedor_por = seller
-
-            VentaHistorial.objects.create(
+            # Notificación interna para aprobación manual.
+            _crear_notificacion_interna_para_todos(
                 venta=sale,
-                accion="CONFIRMACION_VENDEDOR",
-                usuario=seller,
-                detalle=(
-                    "Confirmación operativa automática para checkout web. "
-                    "La venta queda lista para completar."
+                tipo="VENTA_WEB_PENDIENTE",
+                titulo="Nueva compra web pendiente",
+                mensaje=(
+                    f"La compra {sale.numero_factura} del cliente {sale.cliente.nombre} "
+                    "quedó pendiente de aprobación interna."
                 ),
             )
 
-            sale.save(
-                update_fields=[
-                    "confirmacion_cliente_en",
-                    "confirmacion_cliente_por",
-                    "confirmacion_vendedor_en",
-                    "confirmacion_vendedor_por",
-                ]
-            )
-
-            completed = sale.aplicar_descuento_stock_si_completa()
-
-            if completed:
-                VentaHistorial.objects.create(
-                    venta=sale,
-                    accion="COMPLETADA",
-                    usuario=seller,
-                    detalle="Venta web completada y stock descontado.",
-                )
-
         try:
             send_mail(
-                subject=f"Curatio — Confirmación de compra {sale.numero_factura}",
+                subject=f"Curatio — Compra registrada {sale.numero_factura}",
                 message=construir_cuerpo_correo_venta(sale),
                 from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
                 recipient_list=[sale.cliente.email],
@@ -3477,7 +2662,7 @@ def customer_checkout_resource(request):
                 venta=sale,
                 accion="NOTIFICACION_CORREO",
                 usuario=request.user,
-                detalle="Confirmación enviada al cliente.",
+                detalle="Confirmación inicial enviada al cliente.",
             )
 
         sale = Venta.objects.select_related(
@@ -3495,7 +2680,7 @@ def customer_checkout_resource(request):
                 "data": {
                     "checkout_sale": _serialize_checkout_web_result(sale),
                 },
-                "message": "Web checkout completed successfully.",
+                "message": "Web checkout registered successfully. Internal approval is pending.",
             },
             status=status.HTTP_201_CREATED,
         )
@@ -3622,3 +2807,439 @@ def sale_invoice_resource(request, sale_id):
         return _forbidden_sales_response()
 
     return _build_sale_invoice_pdf_by_context(request, sale)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def sales_notifications_resource(request):
+    """
+    Lista notificaciones internas del módulo de ventas.
+
+    Solo aplica para:
+    - Administrador
+    - Farmaceuta
+    """
+    if getattr(request.user, "rol", None) not in ("Administrador", "Farmaceuta"):
+        return _forbidden_sales_response()
+
+    notifications = NotificacionVenta.objects.filter(usuario=request.user).select_related("venta")
+
+    unread_only = (request.GET.get("unread_only") or "").strip().lower()
+    if unread_only == "true":
+        notifications = notifications.filter(leida=False)
+
+    return Response(
+        {
+            "data": {
+                "results": [_serialize_notification_row(item) for item in notifications],
+                "count": notifications.count(),
+                "unread_count": notifications.filter(leida=False).count(),
+            },
+            "message": "Notifications retrieved successfully.",
+        }
+    )
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def sales_notification_read_resource(request, notification_id):
+    """
+    Marca una notificación como leída.
+    """
+    if getattr(request.user, "rol", None) not in ("Administrador", "Farmaceuta"):
+        return _forbidden_sales_response()
+
+    notification = get_object_or_404(
+        NotificacionVenta,
+        pk=notification_id,
+        usuario=request.user,
+    )
+
+    if notification.leida:
+        return Response(
+            {
+                "data": {
+                    "notification": _serialize_notification_row(notification),
+                },
+                "message": "Notification already marked as read.",
+            }
+        )
+
+    notification.leida = True
+    notification.leida_en = timezone.now()
+    notification.save(update_fields=["leida", "leida_en"])
+
+    return Response(
+        {
+            "data": {
+                "notification": _serialize_notification_row(notification),
+            },
+            "message": "Notification marked as read.",
+        }
+    )
+
+# @api_view(["PATCH"])
+# @permission_classes([IsAuthenticated])
+# def sale_internal_approval_resource(request, sale_id):
+#     """
+#     Aprueba manualmente una compra web pendiente.
+
+#     Solo:
+#     - Administrador
+#     - Farmaceuta
+
+#     Reglas:
+#     - la venta debe estar pendiente
+#     - el cliente ya debió haber confirmado el pago
+#     - al aprobar se completa la venta y se descuenta stock
+#     - se notifica al cliente según el método de entrega
+#     """
+#     if not _usuario_puede_vender(request.user):
+#         return _forbidden_sales_response()
+
+#     sale = get_object_or_404(
+#         Venta.objects.select_related(
+#             "cliente",
+#             "vendedor",
+#             "confirmacion_vendedor_por",
+#             "confirmacion_cliente_por",
+#         ).prefetch_related(
+#             "lineas__medicamento",
+#             "historial__usuario",
+#         ),
+#         pk=sale_id,
+#     )
+
+#     if request.user.rol == "Farmaceuta" and sale.vendedor_id != request.user.id:
+#         return _forbidden_sales_response()
+
+#     if sale.estado != "Pendiente":
+#         return Response(
+#             {
+#                 "error": {
+#                     "code": "INVALID_STATUS",
+#                     "message": "Only pending sales can be approved.",
+#                 }
+#             },
+#             status=status.HTTP_400_BAD_REQUEST,
+#         )
+
+#     if sale.confirmacion_cliente_en is None:
+#         return Response(
+#             {
+#                 "error": {
+#                     "code": "PAYMENT_NOT_CONFIRMED",
+#                     "message": "Client payment has not been confirmed yet.",
+#                 }
+#             },
+#             status=status.HTTP_400_BAD_REQUEST,
+#         )
+
+#     with transaction.atomic():
+#         sale = Venta.objects.select_for_update().get(pk=sale.pk)
+
+#         if sale.confirmacion_vendedor_en is not None:
+#             sale.refresh_from_db()
+#             return Response(
+#                 {
+#                     "data": {
+#                         "sale": _serialize_sale_detail(sale),
+#                     },
+#                     "message": "Internal approval was already registered.",
+#                 }
+#             )
+
+#         sale.confirmacion_vendedor_en = timezone.now()
+#         sale.confirmacion_vendedor_por = request.user
+#         sale.save(
+#             update_fields=[
+#                 "confirmacion_vendedor_en",
+#                 "confirmacion_vendedor_por",
+#             ]
+#         )
+
+#         VentaHistorial.objects.create(
+#             venta=sale,
+#             accion="CONFIRMACION_VENDEDOR",
+#             usuario=request.user,
+#             detalle="Compra web aprobada manualmente por el personal interno.",
+#         )
+
+#         completed = sale.aplicar_descuento_stock_si_completa()
+
+#         if completed:
+#             VentaHistorial.objects.create(
+#                 venta=sale,
+#                 accion="COMPLETADA",
+#                 usuario=request.user,
+#                 detalle="Venta completada tras aprobación manual interna.",
+#             )
+
+#         _crear_notificacion_interna_para_todos(
+#             venta=sale,
+#             tipo="VENTA_APROBADA",
+#             titulo="Compra aprobada",
+#             mensaje=(
+#                 f"La compra {sale.numero_factura} del cliente {sale.cliente.nombre} "
+#                 "fue aprobada y completada correctamente."
+#             ),
+#         )
+
+#     # Correo al cliente con mensaje según método de entrega.
+#     try:
+#         send_mail(
+#             subject=f"Curatio — Compra aprobada {sale.numero_factura}",
+#             message=_construir_mensaje_cliente_aprobacion(sale),
+#             from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+#             recipient_list=[sale.cliente.email],
+#             fail_silently=False,
+#         )
+#     except Exception as exc:
+#         VentaHistorial.objects.create(
+#             venta=sale,
+#             accion="NOTIFICACION_CORREO_ERROR",
+#             usuario=request.user,
+#             detalle=f"No se pudo enviar correo de aprobación al cliente: {exc}",
+#         )
+#     else:
+#         VentaHistorial.objects.create(
+#             venta=sale,
+#             accion="NOTIFICACION_CORREO",
+#             usuario=request.user,
+#             detalle="Correo de aprobación y entrega enviado al cliente.",
+#         )
+
+#     sale.refresh_from_db()
+
+#     return Response(
+#         {
+#             "data": {
+#                 "sale": _serialize_sale_detail(sale),
+#                 "completed": completed,
+#             },
+#             "message": "Sale approved and completed successfully.",
+#         }
+#     )
+
+@api_view(["PATCH"])
+@permission_classes([IsAuthenticated])
+def sale_internal_approval_resource(request, sale_id):
+    """
+    Aprueba manualmente una compra web pendiente.
+
+    Solo:
+    - Administrador
+    - Farmaceuta
+
+    Reglas:
+    - la venta debe estar pendiente
+    - el cliente ya debió haber confirmado el pago
+    - al aprobar se completa la venta y se descuenta stock
+    - se notifica al cliente según el método de entrega
+    """
+    if not _usuario_puede_vender(request.user):
+        return _forbidden_sales_response()
+
+    try:
+        sale = get_object_or_404(
+            Venta.objects.select_related(
+                "cliente",
+                "vendedor",
+                "confirmacion_vendedor_por",
+                "confirmacion_cliente_por",
+            ).prefetch_related(
+                "lineas__medicamento",
+                "historial__usuario",
+            ),
+            pk=sale_id,
+        )
+
+        if request.user.rol == "Farmaceuta" and sale.vendedor_id != request.user.id:
+            return _forbidden_sales_response()
+
+        if sale.estado != "Pendiente":
+            return Response(
+                {
+                    "error": {
+                        "code": "INVALID_STATUS",
+                        "message": "Only pending sales can be approved.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if sale.confirmacion_cliente_en is None:
+            return Response(
+                {
+                    "error": {
+                        "code": "PAYMENT_NOT_CONFIRMED",
+                        "message": "Client payment has not been confirmed yet.",
+                    }
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            # Se bloquea la venta para evitar aprobaciones duplicadas concurrentes.
+            sale = (
+                Venta.objects.select_for_update()
+                .select_related(
+                    "cliente",
+                    "vendedor",
+                    "confirmacion_vendedor_por",
+                    "confirmacion_cliente_por",
+                )
+                .prefetch_related(
+                    "lineas__medicamento",
+                    "historial__usuario",
+                )
+                .get(pk=sale.pk)
+            )
+
+            if sale.confirmacion_vendedor_en is not None:
+                return Response(
+                    {
+                        "data": {
+                            "sale": _serialize_sale_detail(sale),
+                        },
+                        "message": "Internal approval was already registered.",
+                    }
+                )
+
+            # Registro de confirmación interna.
+            sale.confirmacion_vendedor_en = timezone.now()
+            sale.confirmacion_vendedor_por = request.user
+            sale.save(
+                update_fields=[
+                    "confirmacion_vendedor_en",
+                    "confirmacion_vendedor_por",
+                ]
+            )
+
+            VentaHistorial.objects.create(
+                venta=sale,
+                accion="CONFIRMACION_VENDEDOR",
+                usuario=request.user,
+                detalle="Compra web aprobada manualmente por el personal interno.",
+            )
+
+            # Intenta completar la venta y descontar stock.
+            try:
+                completed = sale.aplicar_descuento_stock_si_completa()
+            except Exception as exc:
+                return Response(
+                    {
+                        "error": {
+                            "code": "APPROVAL_ERROR",
+                            "message": "No se pudo completar la venta al aprobarla.",
+                            "fields": {
+                                "approval": [str(exc)]
+                            },
+                        }
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # Refuerzo defensivo:
+            # si el método retornó True pero el estado no quedó persistido,
+            # se fuerza el cambio a Completada.
+            if completed and sale.estado != "Completada":
+                sale.estado = "Completada"
+                sale.save(update_fields=["estado"])
+
+            if completed:
+                VentaHistorial.objects.create(
+                    venta=sale,
+                    accion="COMPLETADA",
+                    usuario=request.user,
+                    detalle="Venta completada tras aprobación manual interna.",
+                )
+
+            # La notificación de "pendiente" ya no debe seguir activa.
+            _mark_pending_sale_notifications_as_read(sale)
+
+            # Se registra una nueva notificación informativa para el personal interno.
+            _crear_notificacion_interna_para_todos(
+                venta=sale,
+                tipo="VENTA_APROBADA",
+                titulo="Compra aprobada",
+                mensaje=(
+                    f"La compra {sale.numero_factura} del cliente {sale.cliente.nombre} "
+                    "fue aprobada y completada correctamente."
+                ),
+            )
+
+        # Correo al cliente fuera de la transacción principal.
+        try:
+            send_mail(
+                subject=f"Curatio — Compra aprobada {sale.numero_factura}",
+                message=_construir_mensaje_cliente_aprobacion(sale),
+                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                recipient_list=[sale.cliente.email],
+                fail_silently=False,
+            )
+        except Exception as exc:
+            VentaHistorial.objects.create(
+                venta=sale,
+                accion="NOTIFICACION_CORREO_ERROR",
+                usuario=request.user,
+                detalle=f"No se pudo enviar correo de aprobación al cliente: {exc}",
+            )
+        else:
+            VentaHistorial.objects.create(
+                venta=sale,
+                accion="NOTIFICACION_CORREO",
+                usuario=request.user,
+                detalle="Correo de aprobación y entrega enviado al cliente.",
+            )
+
+        sale = Venta.objects.select_related(
+            "cliente",
+            "vendedor",
+            "confirmacion_vendedor_por",
+            "confirmacion_cliente_por",
+        ).prefetch_related(
+            "lineas__medicamento",
+            "historial__usuario",
+        ).get(pk=sale.pk)
+
+        return Response(
+            {
+                "data": {
+                    "sale": _serialize_sale_detail(sale),
+                    "completed": completed,
+                },
+                "message": "Sale approved and completed successfully.",
+            }
+        )
+
+    except Exception as exc:
+        traceback.print_exc()
+
+        return Response(
+            {
+                "error": {
+                    "code": "SERVER_ERROR",
+                    "message": "Unexpected server error while approving the sale.",
+                    "fields": {
+                        "detail": [str(exc)]
+                    },
+                }
+            },
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+    
+
+def _mark_pending_sale_notifications_as_read(sale):
+    """
+    Marca como leídas las notificaciones internas pendientes asociadas a la venta.
+
+    Se usa cuando una compra web deja de estar pendiente porque ya fue
+    aprobada por Administrador o Farmaceuta.
+    """
+    NotificacionVenta.objects.filter(
+        venta=sale,
+        tipo="VENTA_WEB_PENDIENTE",
+        leida=False,
+    ).update(
+        leida=True,
+        leida_en=timezone.now(),
+    )

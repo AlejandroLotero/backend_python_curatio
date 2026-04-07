@@ -5,6 +5,8 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 
+from django.core.exceptions import ValidationError
+from django.db import transaction
 
 class Venta(models.Model):
     """
@@ -25,6 +27,14 @@ class Venta(models.Model):
         ("Transferencia", "Transferencia"),
     )
 
+    # =========================
+    # NUEVO: MÉTODO DE ENTREGA
+    # =========================
+    METODOS_ENTREGA = (
+        ("delivery", "Domicilio"),
+        ("pickup", "Recogida en tienda"),
+    )
+
     numero_factura = models.CharField(
         max_length=50,
         unique=True,
@@ -43,7 +53,6 @@ class Venta(models.Model):
         verbose_name="Cliente",
     )
 
-    # Quien registra la venta (Administrador o Farmaceuta, según RQ).
     vendedor = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -87,6 +96,55 @@ class Venta(models.Model):
         verbose_name="Estado de la venta",
     )
 
+    # =========================
+    # NUEVO: DATOS DE ENTREGA
+    # =========================
+    metodo_entrega = models.CharField(
+        max_length=20,
+        choices=METODOS_ENTREGA,
+        null=True,
+        blank=True,
+        verbose_name="Método de entrega",
+    )
+
+    direccion_entrega = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        verbose_name="Dirección de entrega",
+    )
+    ciudad_entrega = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        verbose_name="Ciudad de entrega",
+    )
+    telefono_entrega = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        verbose_name="Teléfono de entrega",
+    )
+
+    punto_retiro = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        verbose_name="Punto de retiro",
+    )
+    nombre_contacto_retiro = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        verbose_name="Nombre de contacto para retiro",
+    )
+    telefono_contacto_retiro = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        verbose_name="Teléfono de contacto para retiro",
+    )
+
     confirmacion_vendedor_en = models.DateTimeField(
         null=True,
         blank=True,
@@ -113,64 +171,26 @@ class Venta(models.Model):
         related_name="+",
     )
 
-    class Meta:
-        verbose_name = "Venta"
-        verbose_name_plural = "Ventas"
-        ordering = ["-fecha_hora"]
-
     def __str__(self):
-        return f"{self.numero_factura} — {self.get_estado_display()}"
+        return f"{self.numero_factura} - {self.cliente}"
 
     def clean(self):
-        if self.cliente_id and self.vendedor_id and self.cliente_id == self.vendedor_id:
-            raise ValidationError("La venta debe involucrar al cliente y al usuario que realiza la venta como personas distintas.")
-
-        esperado = self.subtotal + self.iva - self.descuento
-        if self.total != esperado:
-            raise ValidationError(
-                {"total": f"El total debe ser subtotal + IVA - descuento ({esperado})."}
-            )
-
-    def aplicar_descuento_stock_si_completa(self):
         """
-        Si hay doble confirmación y sigue Pendiente, valida stock, descuenta y marca Completada.
-        Debe llamarse dentro de transaction.atomic().
+        Validaciones de coherencia adicionales para el método de entrega.
         """
-        if self.estado != "Pendiente":
-            return False
+        super().clean()
 
-        if not (
-            self.confirmacion_vendedor_en
-            and self.confirmacion_cliente_en
-            and self.confirmacion_vendedor_por_id
-            and self.confirmacion_cliente_por_id
-        ):
-            return False
-
-        from products.models import Medicamento
-
-        lineas = list(self.lineas.select_related("medicamento", "medicamento__estado"))
-
-        for linea in lineas:
-            med = Medicamento.objects.select_for_update().get(pk=linea.medicamento_id)
-            if not med.puede_venderse:
+        if self.metodo_entrega == "delivery":
+            if not self.direccion_entrega:
                 raise ValidationError(
-                    f"El medicamento «{med}» no está disponible para la venta (estado distinto de Activo)."
-                )
-            if linea.cantidad > med.stock:
-                raise ValidationError(
-                    f"Stock insuficiente para «{med}»: solicitado {linea.cantidad}, disponible {med.stock}."
+                    {"direccion_entrega": "La dirección de entrega es obligatoria para domicilio."}
                 )
 
-        for linea in lineas:
-            med = Medicamento.objects.select_for_update().get(pk=linea.medicamento_id)
-            med.stock -= linea.cantidad
-            med.save(update_fields=["stock", "actualizado_en"])
-
-        self.estado = "Completada"
-        self.save(update_fields=["estado"])
-        return True
-
+        if self.metodo_entrega == "pickup":
+            if not self.punto_retiro:
+                raise ValidationError(
+                    {"punto_retiro": "El punto de retiro es obligatorio para recogida en tienda."}
+                )
 
 class VentaLinea(models.Model):
     venta = models.ForeignKey(
@@ -229,3 +249,111 @@ class VentaHistorial(models.Model):
 
     def __str__(self):
         return f"{self.venta_id} — {self.accion}"
+
+class NotificacionVenta(models.Model):
+    """
+    Notificación interna del módulo de ventas / carritos.
+
+    Se usa para:
+    - compras web pendientes de aprobación
+    - cancelaciones
+    - cambios operativos relevantes
+
+    En esta fase se mostrará principalmente a:
+    - Administrador
+    - Farmaceuta
+    """
+
+    TIPOS = (
+        ("VENTA_WEB_PENDIENTE", "Venta web pendiente"),
+        ("VENTA_APROBADA", "Venta aprobada"),
+        ("VENTA_ANULADA", "Venta anulada"),
+        ("CARRITO_ACTIVO", "Carrito activo"),
+        ("GENERAL", "General"),
+    )
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notificaciones_ventas",
+        verbose_name="Usuario destinatario",
+    )
+    venta = models.ForeignKey(
+        "Venta",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="notificaciones",
+        verbose_name="Venta asociada",
+    )
+    tipo = models.CharField(
+        max_length=40,
+        choices=TIPOS,
+        default="GENERAL",
+        verbose_name="Tipo de notificación",
+    )
+    titulo = models.CharField(
+        max_length=150,
+        verbose_name="Título",
+    )
+    mensaje = models.TextField(
+        verbose_name="Mensaje",
+    )
+    leida = models.BooleanField(
+        default=False,
+        verbose_name="Leída",
+    )
+    creada_en = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de creación",
+    )
+    leida_en = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha de lectura",
+    )
+
+    class Meta:
+        ordering = ("-creada_en",)
+
+    def __str__(self):
+        return f"{self.usuario} - {self.titulo}"
+    
+
+
+def aplicar_descuento_stock_si_completa(self):
+    """
+    Completa la venta cuando existen ambas confirmaciones
+    y descuenta el stock.
+
+    Retorna True si la venta fue completada.
+    Retorna False si todavía no cumple condiciones o ya estaba cerrada.
+    """
+    if self.estado != "Pendiente":
+        return False
+
+    if not self.confirmacion_cliente_en or not self.confirmacion_vendedor_en:
+        return False
+
+    lineas = self.lineas.select_related("medicamento").all()
+
+    # Validación previa de stock
+    for linea in lineas:
+        medicamento = linea.medicamento
+
+        if linea.cantidad > medicamento.stock:
+            raise ValidationError(
+                f"Stock insuficiente para '{medicamento.nombre}'. Disponible: {medicamento.stock}."
+            )
+
+    # Descuento real de stock
+    for linea in lineas:
+        medicamento = linea.medicamento
+        medicamento.stock = medicamento.stock - linea.cantidad
+        medicamento.save(update_fields=["stock"])
+
+    # Cambio de estado de la venta
+    self.estado = "Completada"
+    self.save(update_fields=["estado"])
+
+    return True
