@@ -2,7 +2,32 @@
 # La contraseña y datos internos sensibles no se incluyen nunca.
 
 
-def serialize_user_for_profile(user, *, viewer_is_admin: bool):
+def _build_media_absolute_url(request, file_field):
+    """
+    URL absoluta del archivo en MEDIA (misma idea que products.api_views._build_media_url)
+    para que el SPA en otro origen pueda mostrar la imagen.
+    """
+    if not request or not file_field:
+        return None
+    try:
+        return request.build_absolute_uri(file_field.url)
+    except Exception:
+        return None
+
+
+def _user_photo_url(user, request):
+    if not user.foto:
+        return None
+    absolute_url = _build_media_absolute_url(request, user.foto)
+    if absolute_url:
+        return absolute_url
+    try:
+        return user.foto.url
+    except Exception:
+        return None
+
+
+def serialize_user_for_profile(user, *, viewer_is_admin: bool, request=None):
     """
     Datos de cuenta en solo lectura.
     Si quien consulta es ADMIN: incluye estado, fechas de registro/actualización y último acceso.
@@ -18,7 +43,7 @@ def serialize_user_for_profile(user, *, viewer_is_admin: bool):
         "phone": user.telefono,
         "secondary_phone": user.telefono_secundario,
         "address": user.direccion,
-        "photo": user.foto.url if user.foto else None,
+        "photo": _user_photo_url(user, request),
         "start_date": user.fecha_inicio.isoformat() if user.fecha_inicio else None,
         "end_date": user.fecha_fin.isoformat() if user.fecha_fin else None,
         "email_confirmed": getattr(user, "email_confirmed", True),
