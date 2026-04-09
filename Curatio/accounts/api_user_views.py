@@ -1,4 +1,5 @@
 from .email_utils import send_account_created_email
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -9,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from .models import User, BitacoraUsuario
-from .forms import CrearUsuarioForm, EditarUsuarioAdminForm
+from .forms import CrearUsuarioForm, EditarUsuarioAdminForm, EditarUsuarioSelfServiceForm
 from .utils import generar_password
 from .user_serializers import serialize_user_for_profile # Serialización de usuarios para respuestas API (perfil, sesión, listados).
 
@@ -28,6 +29,17 @@ def _empty_to_none(val):
     if isinstance(val, str) and val.strip() == "":
         return None
     return val
+
+
+def _strip_nonempty_str(val):
+    """
+    Texto recortado o None si viene vacío.
+    Evita reemplazar datos del usuario con "" cuando el JSON incluye claves vacías.
+    """
+    if val is None:
+        return None
+    s = str(val).strip()
+    return s if s else None
 
 
 def _merge_admin_update_payload(request, user):
@@ -110,6 +122,88 @@ def _merge_admin_update_payload(request, user):
             else:
                 raw = st
         merged["estado"] = bool(raw)
+
+    return merged
+
+
+def _merge_self_service_payload(request, user):
+    """
+    Combina el usuario actual solo con campos que Cliente/Farmaceuta pueden modificar
+    sobre su propia cuenta (sin rol ni estado).
+    """
+    merged = {
+        "nombre": user.nombre,
+        "tipo_documento": user.tipo_documento,
+        "numero_documento": user.numero_documento,
+        "email": user.email,
+        "telefono": user.telefono,
+        "telefono_secundario": user.telefono_secundario,
+        "direccion": user.direccion,
+        "fecha_inicio": user.fecha_inicio,
+        "fecha_fin": user.fecha_fin,
+    }
+    d = request.data
+
+    if _request_has_field(request, "fullNames", "name", "nombre"):
+        ns = _strip_nonempty_str(
+            d.get("fullNames") or d.get("name") or d.get("nombre")
+        )
+        if ns:
+            merged["nombre"] = ns
+
+    if _request_has_field(request, "documentTypes", "document_type", "tipo_documento"):
+        ts = _strip_nonempty_str(
+            d.get("documentTypes") or d.get("document_type") or d.get("tipo_documento")
+        )
+        if ts:
+            merged["tipo_documento"] = ts
+
+    if _request_has_field(request, "documentNumber", "document_number", "numero_documento"):
+        raw_doc = d.get("documentNumber")
+        if raw_doc is None:
+            raw_doc = d.get("document_number") or d.get("numero_documento")
+        if raw_doc is not None and str(raw_doc).strip():
+            merged["numero_documento"] = str(raw_doc).strip()
+
+    if _request_has_field(request, "email"):
+        es = _strip_nonempty_str(d.get("email"))
+        if es:
+            merged["email"] = es
+
+    if _request_has_field(request, "phoneNumber", "phone", "telefono"):
+        ph = _strip_nonempty_str(
+            d.get("phoneNumber") or d.get("phone") or d.get("telefono")
+        )
+        if ph:
+            merged["telefono"] = ph
+
+    if _request_has_field(request, "secondaryPhone", "secondary_phone", "telefono_secundario"):
+        raw_sec = d.get("secondaryPhone")
+        if raw_sec is None:
+            raw_sec = d.get("secondary_phone")
+        if raw_sec is None:
+            raw_sec = d.get("telefono_secundario")
+        merged["telefono_secundario"] = _empty_to_none(raw_sec)
+
+    if _request_has_field(request, "address", "direccion"):
+        ad = _strip_nonempty_str(d.get("address") or d.get("direccion"))
+        if ad:
+            merged["direccion"] = ad
+
+    # Solo Farmaceuta: fechas; no pisar con null/"" si el front envía startDate/endDate vacíos.
+    if getattr(user, "rol", None) == "Farmaceuta":
+        if _request_has_field(request, "startDate", "start_date", "fecha_inicio"):
+            raw = d.get("startDate")
+            if raw is None:
+                raw = d.get("start_date") or d.get("fecha_inicio")
+            if raw is not None and str(raw).strip():
+                merged["fecha_inicio"] = _empty_to_none(raw)
+        if _request_has_field(request, "endDate", "end_date", "fecha_fin"):
+            raw = d.get("endDate")
+            if raw is None:
+                raw = d.get("end_date") or d.get("fecha_fin")
+            if raw is not None and str(raw).strip():
+                merged["fecha_fin"] = _empty_to_none(raw)
 
     return merged
 
@@ -349,24 +443,105 @@ def users_resource(request):
 
 # Perfil del usuario en sesión (mismo contrato que GET /users/<id>/ cuando id es el propio).
 # Útil para la página de perfil sin conocer el id por delante (FFARMA02).
-@api_view(["GET"])
+@api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
 def user_me_profile_resource(request):
     """
     Perfil del usuario en sesión (mismo contrato que GET /users/<id>/ cuando id es el propio).
     Útil para la página de perfil sin conocer el id por delante (FFARMA02).
+
+    PATCH: Cliente o Farmaceuta actualizan datos básicos y de contacto (y fechas si es Farmaceuta).
     """
     u = request.user
+
+    if request.method == "GET":
+        payload = serialize_user_for_profile(
+            u, viewer_is_admin=_is_admin(u), request=request
+        )
+        return Response(
+            {
+                "data": {
+                    "user": payload,
+                    "meta": _profile_response_meta(request.user, u),
+                },
+                "message": "User retrieved successfully.",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    # ---------- PATCH: autoedición Cliente / Farmaceuta ----------
+    rol = getattr(u, "rol", None)
+    if rol not in ("Cliente", "Farmaceuta"):
+        return Response(
+            {
+                "error": {
+                    "code": "FORBIDDEN",
+                    "message": "You do not have permission to update this profile via this endpoint.",
+                    "fields": {},
+                }
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    merged = _merge_self_service_payload(request, u)
+    photo_file = (
+        request.FILES.get("photo")
+        or request.FILES.get("foto")
+        or request.FILES.get("photoFile")
+    )
+    form_kwargs = {"data": merged, "instance": u}
+    if photo_file:
+        form_kwargs["files"] = request.FILES
+
+    form = EditarUsuarioSelfServiceForm(**form_kwargs)
+
+    if not form.is_valid():
+        return Response(
+            {
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Por favor corrija los campos indicados.",
+                    "fields": _flatten_form_errors(form),
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user = form.save(commit=False)
+    if photo_file:
+        user.foto = photo_file
+    try:
+        user.full_clean()
+    except DjangoValidationError as exc:
+        return Response(
+            {
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Por favor corrija los campos indicados.",
+                    "fields": _flatten_model_validation_error(exc),
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    user.save()
+
+    BitacoraUsuario.objects.create(
+        admin=u,
+        usuario=user,
+        accion="ACTUALIZADO",
+        motivo="Actualización de perfil realizada por el propio usuario.",
+    )
+
     payload = serialize_user_for_profile(
-        u, viewer_is_admin=_is_admin(u), request=request
+        user, viewer_is_admin=_is_admin(user), request=request
     )
     return Response(
         {
             "data": {
                 "user": payload,
-                "meta": _profile_response_meta(request.user, u),
+                "meta": _profile_response_meta(request.user, user),
             },
-            "message": "User retrieved successfully.",
+            "message": "Cuenta actualizada exitosamente",
         },
         status=status.HTTP_200_OK,
     )
