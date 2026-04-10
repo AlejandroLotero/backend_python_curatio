@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Curatio | Crear proveedor{% endblock %}
+
+{% block content %}
+<h2 style="margin:0 0 12px;">Crear proveedor</h2>
+
+<form method="post" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
+    {% csrf_token %}
+
+    {% for field in form %}
+    <div>
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}
+            <span style="color:var(--danger); font-size:0.85em;">{{ field.errors.0 }}</span>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div style="grid-column:1/-1;">
+        <button type="submit" class="btn primary">Guardar proveedor</button>
+    </div>
+</form>
+{% endblock %}

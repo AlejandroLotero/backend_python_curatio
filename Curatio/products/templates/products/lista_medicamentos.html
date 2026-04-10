@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Listar medicamentos – Curatio{% endblock %}
+{% block content %}
+
+<h2>Módulo de Medicamentos (RFADMIN08)</h2>
+<p style="color: var(--muted); font-size: 14px;">Listado de medicamentos registrados. Use los filtros para refinar la búsqueda.</p>
+
+<form method="get" id="filtros-medicamentos" style="margin-bottom: 1rem;">
+  <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+    <input type="text" name="nombre" placeholder="Nombre" value="{{ nombre }}" style="padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,.06); color: var(--text);" />
+
+    <select name="via_administracion" style="padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,.06); color: var(--text);">
+      <option value="">-- Vía de administración --</option>
+      {% for v in vias %}
+        <option value="{{ v.id }}" {% if via_administracion == v.id|stringformat:"s" %}selected{% endif %}>{{ v.nombre }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="laboratorio" style="padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,.06); color: var(--text);">
+      <option value="">-- Laboratorio --</option>
+      {% for lab in laboratorios %}
+        <option value="{{ lab.id }}" {% if laboratorio == lab.id|stringformat:"s" %}selected{% endif %}>{{ lab.nombre }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="estado" style="padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,.06); color: var(--text);">
+      <option value="">-- Estado --</option>
+      {% for e in estados %}
+        <option value="{{ e.id }}" {% if estado == e.id|stringformat:"s" %}selected{% endif %}>{{ e.nombre }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit" class="btn primary">Filtrar</button>
+    <a href="{% url 'listar_medicamentos' %}" class="btn">Limpiar</a>
+
+    <div style="display: flex; gap: 8px; margin-left: auto;">
+      <a href="{% url 'reporte_medicamentos' %}?formato=excel&nombre={{ nombre }}&via_administracion={{ via_administracion }}&laboratorio={{ laboratorio }}&estado={{ estado }}" class="btn">📊 Excel</a>
+      <a href="{% url 'reporte_medicamentos' %}?formato=pdf&nombre={{ nombre }}&via_administracion={{ via_administracion }}&laboratorio={{ laboratorio }}&estado={{ estado }}" class="btn">📄 PDF</a>
+    </div>
+  </div>
+</form>
+
+<div style="overflow-x: auto;">
+  <table border="1" cellpadding="10" cellspacing="0" width="100%" style="border-collapse: collapse; border-color: var(--border); font-size: 13px;">
+    <thead>
+      <tr style="background: rgba(79,124,255,.15);">
+        <th>Nombre</th>
+        <th>Forma farmacéutica</th>
+        <th>Presentación</th>
+        <th>Concentración</th>
+        <th>Vía administración</th>
+        <th>Laboratorio</th>
+        <th>Lote</th>
+        <th>F. fabricación</th>
+        <th>F. vencimiento</th>
+        <th>Stock</th>
+        <th>Precio compra</th>
+        <th>Precio venta</th>
+        <th>Proveedor</th>
+        <th>Requiere fórmula</th>
+        <th>Descripción</th>
+        <th>Estado</th>
+        <th>Responsable</th>
+        <th>Creado por</th>
+        <th>Creado en</th>
+        #para la regla de negocio de que solo se puede vender si el estado es Activo
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in page_obj %}
+        <tr style="border-bottom: 1px solid var(--border);">
+          <td>{{ m.nombre }}</td>
+          <td>{{ m.forma.nombre }}</td>
+          <td>{{ m.presentacion.nombre }}</td>
+          <td>{{ m.concentracion }}</td>
+          <td>{{ m.via_administracion.nombre }}</td>
+          <td>{{ m.laboratorio.nombre }}</td>
+          <td>{{ m.lote }}</td>
+          <td>{{ m.fecha_fabricacion|date:"d/m/Y" }}</td>
+          <td>{{ m.fecha_vencimiento|date:"d/m/Y" }}</td>
+          <td>{{ m.stock }}</td>
+          <td>{{ m.precio_compra }}</td>
+          <td>{{ m.precio_venta }}</td>
+          <td>{{ m.proveedor.nombre }}</td>
+          <td>{% if m.requiere_formula %}Sí{% else %}No{% endif %}</td>
+          <td>{{ m.descripcion|truncatewords:8 }}</td>
+          <td>{{ m.estado.nombre }}</td>
+          <td>{{ m.responsable.email|default:"—" }}</td>
+          <td>{{ m.creado_por.email }}</td>
+          <td>{{ m.creado_en|date:"d/m/Y H:i" }}</td>
+          <td>
+            <form method="post" action="{% url 'cambiar_estado_medicamento' m.pk %}" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+              {% csrf_token %}
+              <select name="estado" style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,.06); color: var(--text); font-size: 12px; min-width: 110px;">
+                {% for e in estados %}
+                  <option value="{{ e.id }}" {% if m.estado_id == e.id %}selected{% endif %}>{{ e.nombre }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn primary" style="padding: 6px 12px; font-size: 12px;">Cambiar estado</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="21" style="text-align: center; padding: 24px; color: var(--muted);">No hay medicamentos para mostrar. Ajuste los filtros o registre medicamentos.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="margin-top: 1rem; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+  {% if page_obj.has_previous %}
+    <a href="?page=1&nombre={{ nombre }}&via_administracion={{ via_administracion }}&laboratorio={{ laboratorio }}&estado={{ estado }}" class="btn">« Primero</a>
+    <a href="?page={{ page_obj.previous_page_number }}&nombre={{ nombre }}&via_administracion={{ via_administracion }}&laboratorio={{ laboratorio }}&estado={{ estado }}" class="btn">‹ Anterior</a>
+  {% endif %}
+  <span style="color: var(--muted);">
+    Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} registros)
+  </span>
+  {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}&nombre={{ nombre }}&via_administracion={{ via_administracion }}&laboratorio={{ laboratorio }}&estado={{ estado }}" class="btn">Siguiente ›</a>
+    <a href="?page={{ page_obj.paginator.num_pages }}&nombre={{ nombre }}&via_administracion={{ via_administracion }}&laboratorio={{ laboratorio }}&estado={{ estado }}" class="btn">Último »</a>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+<th>Acciones</th>
+<td>
+
+<a href="{% url 'editar_medicamento' m.pk %}" class="btn">Editar</a>
+
+<form method="post" action="{% url 'cambiar_estado_medicamento' m.pk %}">

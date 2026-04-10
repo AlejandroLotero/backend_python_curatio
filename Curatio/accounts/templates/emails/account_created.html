@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Cuenta creada</title>
+</head>
+<body style="margin:0; padding:0; background:{{ background_color }}; font-family:Arial, Helvetica, sans-serif; color:{{ text_color }};">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:{{ background_color }}; padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px; background:{{ card_color }}; border:1px solid {{ border_color }}; border-radius:18px; overflow:hidden;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg, {{ primary_color }}, #123E63); padding:28px 32px;">
+              <table role="presentation" width="100%">
+                <tr>
+                  <td style="vertical-align:middle;">
+                    {% if brand_logo_url %}
+                      <img src="{{ brand_logo_url }}" alt="{{ brand_name }}" style="max-height:52px; display:block; margin-bottom:10px;">
+                    {% endif %}
+                    <div style="font-size:28px; font-weight:700; color:#ffffff; margin-bottom:4px;">
+                      {{ brand_name }}
+                    </div>
+                    <div style="font-size:14px; color:#D7E8F7;">
+                      Plataforma de gestión farmacéutica
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Banner -->
+          <tr>
+            <td style="padding:0;">
+              <div style="background:#E8F7F4; color:#0F4C81; padding:14px 32px; font-size:14px; font-weight:600; border-bottom:1px solid {{ border_color }};">
+                Tu acceso ha sido creado correctamente
+              </div>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding:32px;">
+              <h1 style="margin:0 0 14px; font-size:26px; color:{{ text_color }};">
+                Hola, {{ user.nombre }}
+              </h1>
+
+              <p style="margin:0 0 18px; font-size:15px; line-height:1.7; color:{{ text_color }};">
+                Te damos la bienvenida a <strong>{{ brand_name }}</strong>. Tu cuenta ha sido creada exitosamente y ya puedes acceder a la plataforma con las credenciales asignadas.
+              </p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0; background:#F9FAFB; border:1px solid {{ border_color }}; border-radius:14px;">
+                <tr>
+                  <td style="padding:22px;">
+                    <div style="font-size:13px; color:{{ muted_color }}; margin-bottom:6px;">Correo registrado</div>
+                    <div style="font-size:16px; color:{{ text_color }}; font-weight:600; margin-bottom:18px;">
+                      {{ user.email }}
+                    </div>
+
+                    <div style="font-size:13px; color:{{ muted_color }}; margin-bottom:6px;">Contraseña temporal</div>
+                    <div style="font-size:20px; color:{{ primary_color }}; font-weight:700; letter-spacing:.4px;">
+                      {{ temporary_password }}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              {% if login_url %}
+              <div style="margin:26px 0 10px;">
+                <a href="{{ login_url }}"
+                   style="display:inline-block; background:{{ primary_color }}; color:#ffffff; text-decoration:none; padding:14px 22px; border-radius:10px; font-size:14px; font-weight:700;">
+                  Ingresar a Curatio
+                </a>
+              </div>
+              {% endif %}
+
+              <div style="margin-top:26px; padding:18px; background:#F0FDFB; border:1px solid #CDEFE9; border-radius:12px;">
+                <div style="font-size:14px; font-weight:700; color:{{ accent_color }}; margin-bottom:8px;">
+                  Recomendación de seguridad
+                </div>
+                <div style="font-size:14px; line-height:1.7; color:{{ text_color }};">
+                  Cambia tu contraseña en el primer ingreso y evita compartir tus credenciales con terceros.
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:22px 32px; background:#F9FAFB; border-top:1px solid {{ border_color }};">
+              <p style="margin:0; font-size:12px; color:{{ muted_color }}; line-height:1.7;">
+                Este es un correo automático de {{ brand_name }}. Por favor, no respondas a este mensaje.
+                {% if support_email %}<br>Contacto de referencia: {{ support_email }}{% endif %}
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

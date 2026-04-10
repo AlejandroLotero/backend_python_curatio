@@ -1,71 +1,67 @@
-"""
-URL configuration for config project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/6.0/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
-#Anterior
-# from django.contrib import admin
-# from django.urls import path
-
-# urlpatterns = [
-#     path('admin/', admin.site.urls),
-# ]
-
-# urlpatterns = [
-#     path('admin-panel/', admin.site.urls),
-#     # Login profesional
-#     path('login/', auth_views.LoginView.as_view(template_name='accounts/login.html'), name='login'),
-#     # Recuperación de contraseña (RFADMIN01)
-#     path('password-reset/', auth_views.PasswordResetView.as_view(), name='password_reset'),
-#     path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
-# ]
-
 from django.contrib import admin
 from django.urls import path, include
-from django.contrib.auth import views as auth_views
-from accounts import views as account_views
 from django.conf import settings
 from django.conf.urls.static import static
 
-
-
-
+from accounts.api_user_views import (
+    users_resource,
+    # Recurso colección de usuarios.
+    user_me_profile_resource, 
+    user_detail_resource,
+    user_status_resource,
+)
+from accounts.api_identity_views import (
+    csrf_token_view,
+    session_resource_view,
+    password_recovery_request_view,
+    password_recovery_validate_view,
+    password_recovery_confirm_view,
+    session_takeover_view,
+)
 
 urlpatterns = [
-    path('admin-panel/', admin.site.urls),
-    path('login/', auth_views.LoginView.as_view(template_name='accounts/login.html'), name='login'),
-    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
-    
-    # Esta es la ruta que te falta para el error 404:
-    path('', account_views.dashboard, name='dashboard'),
-    
-    # Rutas de recuperación
-    path('password-reset/', auth_views.PasswordResetView.as_view(), name='password_reset'),
-    path('password-reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
-    path('accounts/crear/', account_views.crear_usuario, name='crear_usuario'),
+    path("admin-panel/", admin.site.urls),
 
-    #Visualizar usuario
-    # Usuario autenticado ve su perfil
-    path('accounts/perfil/', account_views.ver_usuario, name='mi_perfil'),
+    # =========================
+    # IDENTITY / SESSION
+    # =========================
+    path("v1/identity/csrf-token/", csrf_token_view, name="identity_csrf_token"),
+    path("v1/identity/session/", session_resource_view, name="identity_session"),
 
-    # ADMIN ve cualquier usuario
-    path('accounts/usuario/<int:user_id>/', account_views.ver_usuario, name='ver_usuario_admin'),
+    # =========================
+    # PASSWORD RECOVERY
+    # =========================
+    path("v1/identity/password-recovery/",
+        password_recovery_request_view,
+        name="password_recovery_request",
+    ),
+    path(
+        "v1/identity/password-recovery/validate/",
+        password_recovery_validate_view,
+        name="password_recovery_validate",
+    ),
+    path(
+        "v1/identity/password-recovery/confirm/",
+        password_recovery_confirm_view,
+        name="password_recovery_confirm",
+    ),
+    path(
+        "v1/identity/session/takeover/",
+        session_takeover_view,
+        name="identity_session_takeover",
+    ),
 
-    #ADMIN lista usuarios
-    path('accounts/usuarios/', account_views.lista_usuarios, name='lista_usuarios'),
-    
+    # ============================
+    # USERS
+    # =========================
+    path("v1/people/users/", users_resource, name="users_resource"),
+    path("v1/people/users/<int:user_id>/", user_detail_resource, name="user_detail_resource"),
+    path("v1/people/users/<int:user_id>/status/", user_status_resource, name="user_status_resource"),
 
+    path("", include("accounts.urls")),
+    path("", include("products.urls")),
+    path("", include("sales.urls")),
+    path("api/", include("sales.urls")),    
 ]
 
 if settings.DEBUG:

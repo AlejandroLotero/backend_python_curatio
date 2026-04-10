@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Curatio | Visualización de proveedores{% endblock %}
+
+{% block content %}
+<h2 style="margin:0 0 12px;">Visualización de proveedores</h2>
+
+<form method="get" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-bottom:18px;">
+    <div>
+        <label for="id_nit">NIT</label>
+        <input
+            type="text"
+            name="nit"
+            id="id_nit"
+            value="{{ nit }}"
+            placeholder="Ej: 12345678-9"
+        >
+    </div>
+
+    <div>
+        <label for="id_nombre">Nombre</label>
+        <input
+            type="text"
+            name="nombre"
+            id="id_nombre"
+            value="{{ nombre }}"
+            placeholder="Nombre del proveedor"
+        >
+    </div>
+
+    <div style="display:flex; align-items:end; gap:10px; flex-wrap:wrap;">
+        <button type="submit" class="btn primary">Buscar</button>
+        <a href="{% url 'visualizar_proveedores' %}" class="btn">Limpiar</a>
+        <a href="{% url 'reporte_proveedores' %}?formato=excel&amp;nit={{ nit|urlencode }}&amp;nombre={{ nombre|urlencode }}" class="btn">📊 Reporte Excel</a>
+        <a href="{% url 'reporte_proveedores' %}?formato=pdf&amp;nit={{ nit|urlencode }}&amp;nombre={{ nombre|urlencode }}" class="btn">📄 Reporte PDF</a>
+    </div>
+</form>
+<p style="margin:0 0 18px; font-size:.9rem; opacity:.85;">
+    Sin NIT ni nombre, el reporte incluye todos los proveedores. Con filtros, solo los que coincidan con la búsqueda.
+</p>
+
+{% if busqueda_realizada %}
+    {% if proveedores %}
+        <div style="display:grid; gap:14px;">
+            {% for proveedor in proveedores %}
+                <div style="border:1px solid var(--border); border-radius:16px; padding:16px; background: rgba(255,255,255,.04);">
+                    <h3 style="margin:0 0 10px;">{{ proveedor.nombre }}</h3>
+
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:10px;">
+                    <div>
+                        <strong>NIT:</strong><br>
+                        <span>{{ proveedor.nit }}</span>
+                    </div>
+
+                    <div>
+                        <strong>Razón social:</strong><br>
+                        <span>{{ proveedor.razon_social }}</span>
+                    </div>
+
+                    <div>
+                        <strong>Nombre de contacto:</strong><br>
+                        <span>{{ proveedor.nombre_contacto }}</span>
+                    </div>
+
+                    <div>
+                        <strong>Teléfono de contacto:</strong><br>
+                        <span>{{ proveedor.telefono_contacto }}</span>
+                    </div>
+
+                    <div>
+                        <strong>Correo de contacto:</strong><br>
+                        <span>{{ proveedor.correo_contacto }}</span>
+                    </div>
+
+                    <div>
+                        <strong>Dirección:</strong><br>
+                        <span>{{ proveedor.direccion|default:"No registrada" }}</span>
+                    </div>
+
+                    <div>
+                        <strong>Ciudad:</strong><br>
+                        <span>{{ proveedor.ciudad|default:"No registrada" }}</span>
+                    </div>
+
+                    <div>
+                        <strong>Estado:</strong><br>
+                        <span>{{ proveedor.estado }}</span>
+                    </div>
+
+                    <div>
+                        <strong>Creado por:</strong><br>
+                        <span>{% if proveedor.creado_por %}{{ proveedor.creado_por.email }}{% else %}—{% endif %}</span>
+                    </div>
+
+                    <div>
+                        <strong>Fecha de creación:</strong><br>
+                        <span>{{ proveedor.creado_en|date:"Y-m-d H:i" }}</span>
+                    </div>
+                </div>
+
+                <div style="margin-top:14px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <a href="{% url 'editar_proveedor' proveedor.pk %}" class="btn primary">Editar</a>
+
+                    <form method="post" action="{% url 'cambiar_estado_proveedor' proveedor.pk %}" style="display:flex; gap:8px; align-items:center;">
+                        {% csrf_token %}
+                        <select name="estado">
+                            <option value="Activo" {% if proveedor.estado == "Activo" %}selected{% endif %}>Activo</option>
+                            <option value="Inactivo" {% if proveedor.estado == "Inactivo" %}selected{% endif %}>Inactivo</option>
+                        </select>
+                        <button type="submit" class="btn">Actualizar estado</button>
+                    </form>
+                </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% elif sugerencias %}
+        <div style="margin-top:14px;">
+            <div style="padding:12px 14px; border-radius:12px; border:1px solid rgba(255,204,102,.35); background: rgba(255,204,102,.10); margin-bottom:12px;">
+                No se encontraron coincidencias exactas. Quizás buscabas alguno de estos proveedores:
+            </div>
+
+            <div style="display:grid; gap:12px;">
+                {% for proveedor in sugerencias %}
+                    <div style="border:1px solid var(--border); border-radius:16px; padding:14px; background: rgba(255,255,255,.04);">
+                        <strong>{{ proveedor.nombre }}</strong><br>
+                        <span>NIT: {{ proveedor.nit }}</span><br>
+                        <span>Razón social: {{ proveedor.razon_social }}</span><br>
+                        <span>Estado: {{ proveedor.estado }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    <div style="padding:12px 14px; border-radius:12px; border:1px solid var(--border); background: rgba(255,255,255,.04);">
+        Ingresa un NIT o nombre para consultar proveedores registrados.
+    </div>
+{% endif %}
+{% endblock %}

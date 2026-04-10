@@ -1,0 +1,11 @@
+EN EL ENTORNO VIRTUAL
+
+pip install django
+pip install django-environ
+pip install djangorestframework
+python -m pip install Pillow
+pip install reportlab
+pip install openpyxl
+python -m pip install django-cors-headers
+pip install mysqlclient
+
