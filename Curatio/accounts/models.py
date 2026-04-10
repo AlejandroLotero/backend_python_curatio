@@ -11,6 +11,9 @@ import re
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.core.exceptions import ValidationError
+from django.conf import settings
+from django.db import models
+from django.utils import timezone
 
 
 # =========================
@@ -230,3 +233,37 @@ class BitacoraUsuario(models.Model):
 
     def __str__(self):
         return f"{self.admin.email} -> {self.usuario.email} ({self.accion})"
+    
+
+class ExclusiveSession(models.Model):
+    """
+    Mantiene la sesión exclusiva actualmente dueña de la cuenta.
+
+    Diseño:
+    - Un usuario puede tener solo una sesión activa dueña al mismo tiempo.
+    - Se guarda el session_key real de Django para poder invalidarla
+      cuando otro cliente tome el control.
+    - client_instance_id identifica la instalación/pestaña actual en frontend.
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="exclusive_session",
+    )
+    session_key = models.CharField(max_length=128, unique=True)
+    client_instance_id = models.CharField(max_length=128)
+    acquired_at = models.DateTimeField(default=timezone.now)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    replaced_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "accounts_exclusive_session"
+
+    def touch(self):
+        """
+        Actualiza la última actividad observada de la sesión dueña.
+        """
+        self.last_seen_at = timezone.now()
+        self.save(update_fields=["last_seen_at"])

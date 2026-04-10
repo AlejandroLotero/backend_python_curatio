@@ -16,6 +16,7 @@ from accounts.api_identity_views import (
     password_recovery_request_view,
     password_recovery_validate_view,
     password_recovery_confirm_view,
+    session_takeover_view,
 )
 
 urlpatterns = [
@@ -43,6 +44,11 @@ urlpatterns = [
         "v1/identity/password-recovery/confirm/",
         password_recovery_confirm_view,
         name="password_recovery_confirm",
+    ),
+    path(
+        "v1/identity/session/takeover/",
+        session_takeover_view,
+        name="identity_session_takeover",
     ),
 
     # ============================
