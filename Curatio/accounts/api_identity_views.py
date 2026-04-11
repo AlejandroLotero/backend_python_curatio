@@ -678,7 +678,7 @@ def csrf_token_view(request):
             "data": {
                 "csrfToken": token,
             },
-            "message": "CSRF token generated successfully.",
+            "message": "CSRF token se ha genarado correctamente.",
         },
         status=status.HTTP_200_OK,
     )
@@ -704,7 +704,7 @@ def session_resource_view(request):
                     {
                         "error": {
                             "code": "SESSION_EXPIRED",
-                            "message": "Session expired due to inactivity.",
+                            "message": "Su sesion ha expirado por inactividad.",
                             "fields": {},
                         }
                     },
@@ -716,7 +716,7 @@ def session_resource_view(request):
                     {
                         "error": {
                             "code": "SESSION_REPLACED",
-                            "message": "Your session was replaced by another tab or device.",
+                            "message": "Su sesion fue reemplazada por otra pestaña o dispositivo.",
                             "fields": {},
                         }
                     },
@@ -727,7 +727,7 @@ def session_resource_view(request):
                 {
                     "error": {
                         "code": "UNAUTHENTICATED",
-                        "message": "Authentication required.",
+                        "message": "Autenticación requerida.",
                         "fields": {},
                     }
                 },
@@ -739,7 +739,7 @@ def session_resource_view(request):
                 "data": {
                     "user": _serialize_session_user(request, request.user),
                 },
-                "message": "Session retrieved successfully.",
+                "message": "Sesión obtenida correctamente.",
             },
             status=status.HTTP_200_OK,
         )
@@ -782,7 +782,7 @@ def session_resource_view(request):
                 {
                     "error": {
                         "code": "INVALID_CREDENTIALS",
-                        "message": "Invalid email or password.",
+                        "message": "Email o contraseña inválidos.",
                         "fields": {},
                     }
                 },
@@ -806,7 +806,7 @@ def session_resource_view(request):
                 {
                     "error": {
                         "code": "EMAIL_NOT_CONFIRMED",
-                        "message": "Your email address is not confirmed.",
+                        "message": "Su dirección de correo electrónico no está confirmada.",
                         "fields": {},
                     }
                 },
@@ -832,7 +832,7 @@ def session_resource_view(request):
                 {
                     "error": {
                         "code": "SESSION_CONFLICT",
-                        "message": "This account is already active in another tab or device.",
+                        "message": "Esta cuenta ya está activa en otra pestaña o dispositivo.",
                         "fields": {},
                     },
                     "data": {
@@ -859,7 +859,7 @@ def session_resource_view(request):
                 {
                     "error": {
                         "code": "SESSION_CONFLICT",
-                        "message": "Another active session exists.",
+                        "message": "Ya existe una sesión activa.",
                         "fields": {},
                         "meta": {
                             "requires_takeover": True
@@ -878,7 +878,7 @@ def session_resource_view(request):
                 "data": {
                     "user": _serialize_session_user(request, user),
                 },
-                "message": "Session created successfully.",
+                "message": "Sesión creada correctamente.",
             },
             status=status.HTTP_200_OK,
         )
@@ -892,7 +892,7 @@ def session_resource_view(request):
                 {
                     "error": {
                         "code": "UNAUTHENTICATED",
-                        "message": "Authentication required.",
+                        "message": "Autenticación requerida.",
                         "fields": {},
                     }
                 },
@@ -912,7 +912,7 @@ def session_resource_view(request):
         return Response(
             {
                 "data": None,
-                "message": "Session deleted successfully.",
+                "message": "Sesión eliminada correctamente.",
             },
             status=status.HTTP_200_OK,
         )
@@ -931,7 +931,7 @@ def password_recovery_request_view(request):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Email is required.",
+                    "message": "El email es requerido.",
                     "fields": {
                         "email": ["This field is required."],
                     },
@@ -955,7 +955,7 @@ def password_recovery_request_view(request):
             "data": {
                 "recovery_uid": recovery_uid,
             },
-            "message": "If the email exists, a password reset message has been sent.",
+            "message": "Si el email existe, se ha enviado un mensaje de recuperación de contraseña.",
         },
         status=status.HTTP_200_OK,
     )
@@ -975,7 +975,7 @@ def password_recovery_validate_view(request):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "UID and token are required.",
+                    "message": "UID y token son requeridos.",
                     "fields": {
                         "uid": ["This field is required."] if not uid else [],
                         "token": ["This field is required."] if not token else [],
@@ -992,7 +992,7 @@ def password_recovery_validate_view(request):
             {
                 "error": {
                     "code": "INVALID_TOKEN",
-                    "message": "Invalid recovery context.",
+                    "message": "Contexto de recuperación inválido.",
                     "fields": {},
                 }
             },
@@ -1004,7 +1004,7 @@ def password_recovery_validate_view(request):
             {
                 "error": {
                     "code": "INVALID_TOKEN",
-                    "message": "The token is invalid or expired.",
+                    "message": "El token es inválido o ha expirado.",
                     "fields": {},
                 }
             },
@@ -1016,7 +1016,7 @@ def password_recovery_validate_view(request):
             "data": {
                 "valid": True,
             },
-            "message": "Token validated successfully.",
+            "message": "Token validado correctamente.",
         },
         status=status.HTTP_200_OK,
     )
@@ -1061,9 +1061,9 @@ def password_recovery_confirm_view(request):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Passwords do not match.",
+                    "message": "Las contraseñas no coinciden.",
                     "fields": {
-                        "confirm_password": ["Passwords do not match."],
+                        "confirm_password": ["Las contraseñas no coinciden."],
                     },
                 }
             },
@@ -1077,7 +1077,7 @@ def password_recovery_confirm_view(request):
             {
                 "error": {
                     "code": "INVALID_TOKEN",
-                    "message": "Invalid recovery context.",
+                    "message": "Contexto de recuperación inválido.",
                     "fields": {},
                 }
             },
@@ -1089,7 +1089,7 @@ def password_recovery_confirm_view(request):
             {
                 "error": {
                     "code": "INVALID_TOKEN",
-                    "message": "The token is invalid or expired.",
+                    "message": "El token es inválido o ha expirado.",
                     "fields": {},
                 }
             },
@@ -1103,7 +1103,7 @@ def password_recovery_confirm_view(request):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Password does not meet security policy.",
+                    "message": "La contraseña no cumple con la política de seguridad.",
                     "fields": {
                         "password": list(exc.messages),
                     },
@@ -1118,7 +1118,7 @@ def password_recovery_confirm_view(request):
     return Response(
         {
             "data": None,
-            "message": "Contraseña actualizada exitosamente.",
+            "message": "Contraseña actualizada correctamente.",
         },
         status=status.HTTP_200_OK,
     )
@@ -1150,7 +1150,7 @@ def session_takeover_view(request):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Email, password and client instance are required.",
+                    "message": "Email, contraseña y cliente son requeridos.",
                     "fields": field_errors,
                 }
             },
@@ -1164,7 +1164,7 @@ def session_takeover_view(request):
             {
                 "error": {
                     "code": "INVALID_CREDENTIALS",
-                    "message": "Invalid email or password.",
+                    "message": "Email o contraseña inválidos.",
                     "fields": {},
                 }
             },
@@ -1176,7 +1176,7 @@ def session_takeover_view(request):
             {
                 "error": {
                     "code": "ACCOUNT_DISABLED",
-                    "message": "This account is disabled.",
+                    "message": "Esta cuenta está deshabilitada.",
                     "fields": {},
                 }
             },
@@ -1188,7 +1188,7 @@ def session_takeover_view(request):
             {
                 "error": {
                     "code": "EMAIL_NOT_CONFIRMED",
-                    "message": "Your email address is not confirmed.",
+                    "message": "Su dirección de correo electrónico no está confirmada.",
                     "fields": {},
                 }
             },
@@ -1211,7 +1211,7 @@ def session_takeover_view(request):
             "data": {
                 "user": _serialize_session_user(request, user),
             },
-            "message": "Session takeover completed successfully.",
+            "message": "Transferencia de sesión completada correctamente.",
         },
         status=status.HTTP_200_OK,
     )
@@ -1267,7 +1267,7 @@ def password_change_session_view(request):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Password does not meet security policy.",
+                    "message": "La contraseña no cumple con la política de seguridad.",
                     "fields": {
                         "password": list(exc.messages)
                     },
@@ -1283,7 +1283,7 @@ def password_change_session_view(request):
     return Response(
         {
             "data": None,
-            "message": "Contraseña actualizada exitosamente."
+            "message": "Contraseña actualizada correctamente."
         },
         status=status.HTTP_200_OK,
     )

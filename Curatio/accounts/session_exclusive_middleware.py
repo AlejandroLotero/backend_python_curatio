@@ -113,7 +113,7 @@ class ExclusiveSessionMiddleware:
                     {
                         "error": {
                             "code": "SESSION_REPLACED",
-                            "message": "Your session was replaced by another tab or device.",
+                            "message": "Su sesión fue reemplazada por otra pestaña o dispositivo.",
                             "fields": {},
                         }
                     },

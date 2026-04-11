@@ -891,21 +891,13 @@ from .forms import (
 )
 
 
-def _is_admin(user):
+def _usuario_es_admin_o_farmaceuta(user):
     """
-    Valida si el usuario autenticado es Administrador.
-    """
-    return getattr(user, "rol", None) == "Administrador"
+    True si en BD el usuario tiene rol Administrador o Farmaceuta.
 
-
-def _puede_gestionar_proveedores(user):
-    """
-    Permite gestión de proveedores a:
-    - Administrador
-    - Farmaceuta
-
-    Se consulta el rol real en BD para evitar inconsistencias
-    entre sesión y datos actuales del usuario.
+    Política única para la API de productos consumida por la SPA (frontend aparte):
+    inventario de medicamentos y proveedores comparten el mismo criterio.
+    Se lee el rol desde la BD para no depender de datos desactualizados en sesión.
     """
     if not getattr(user, "is_authenticated", False):
         return False
@@ -927,6 +919,21 @@ def _puede_gestionar_proveedores(user):
     return str(rol).strip().casefold() in ("administrador", "farmaceuta")
 
 
+def _puede_gestionar_proveedores(user):
+    """
+    Permite gestión de proveedores a Administrador o Farmaceuta.
+    """
+    return _usuario_es_admin_o_farmaceuta(user)
+
+
+def _puede_gestionar_medicamentos(user):
+    """
+    Permite gestión del inventario de medicamentos (rutas v1/inventory/medications)
+    a Administrador o Farmaceuta, en línea con v1/procurement/suppliers.
+    """
+    return _usuario_es_admin_o_farmaceuta(user)
+
+
 def _forbidden_suppliers_response():
     """
     Respuesta estándar cuando un usuario no tiene permisos
@@ -936,7 +943,7 @@ def _forbidden_suppliers_response():
         {
             "error": {
                 "code": "FORBIDDEN",
-                "message": "You do not have permission.",
+                "message": "No tiene permiso para acceder a este recurso.",
             }
         },
         status=status.HTTP_403_FORBIDDEN,
@@ -1206,10 +1213,10 @@ def _supplier_estado_change_response(request, proveedor):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Invalid status.",
+                    "message": "Estado inválido.",
                     "fields": {
                         "estado": [
-                            'Debe ser "Activo" o "Inactivo" (o status active/inactive).'
+                            'Debe ser "Activo" o "Inactivo" (o estado active/inactive).'
                         ]
                     },
                 }
@@ -1225,7 +1232,7 @@ def _supplier_estado_change_response(request, proveedor):
                 "data": {
                     "supplier": _serialize_supplier_row(proveedor),
                 },
-                "message": "Supplier status unchanged.",
+                "message": "Estado de proveedor no cambiado.",
             }
         )
 
@@ -1244,7 +1251,7 @@ def _supplier_estado_change_response(request, proveedor):
             "data": {
                 "supplier": _serialize_supplier_row(proveedor),
             },
-            "message": "Supplier status updated successfully.",
+            "message": "Estado de proveedor actualizado correctamente.",
         }
     )
 
@@ -1254,13 +1261,15 @@ def _supplier_estado_change_response(request, proveedor):
 def medications_resource(request):
     """
     Recurso administrativo de medicamentos.
+    Administrador y Farmaceuta (misma política que proveedores en esta API).
     """
-    if not _is_admin(request.user):
+    # Farmaceuta: acceso SPA al inventario; no se usan templates Django del módulo products.
+    if not _puede_gestionar_medicamentos(request.user):
         return Response(
             {
                 "error": {
                     "code": "FORBIDDEN",
-                    "message": "You do not have permission.",
+                    "message": "No tiene permiso para acceder a este recurso.",
                 }
             },
             status=status.HTTP_403_FORBIDDEN,
@@ -1323,7 +1332,7 @@ def medications_resource(request):
                     "status": medication_status,
                 }
             },
-            "message": "Medications retrieved successfully."
+            "message": "Medicamentos recuperados correctamente."
         })
 
     form = CrearMedicamentoForm(request.data, request.FILES)
@@ -1349,7 +1358,7 @@ def medications_resource(request):
                 "data": {
                     "medication": _serialize_medication(medication, request=request)
                 },
-                "message": "Medication created successfully."
+                "message": "Medicamento creado correctamente."
             },
             status=status.HTTP_201_CREATED,
         )
@@ -1358,7 +1367,7 @@ def medications_resource(request):
         {
             "error": {
                 "code": "VALIDATION_ERROR",
-                "message": "Please correct the highlighted fields.",
+                "message": "Por favor corrija los campos resaltados en rojo en el formulario.",
                 "fields": form.errors,
             }
         },
@@ -1371,13 +1380,14 @@ def medications_resource(request):
 def medication_detail_resource(request, medication_id):
     """
     Detalle administrativo de medicamento.
+    Administrador y Farmaceuta.
     """
-    if not _is_admin(request.user):
+    if not _puede_gestionar_medicamentos(request.user):
         return Response(
             {
                 "error": {
                     "code": "FORBIDDEN",
-                    "message": "You do not have permission.",
+                    "message": "No tiene permiso para acceder a este recurso.",
                 }
             },
             status=status.HTTP_403_FORBIDDEN,
@@ -1402,7 +1412,7 @@ def medication_detail_resource(request, medication_id):
             "data": {
                 "medication": _serialize_medication(medication, request=request)
             },
-            "message": "Medication retrieved successfully."
+            "message": "Medicamento recuperado correctamente."
         })
 
     form = ActualizarMedicamentoForm(request.data, request.FILES, instance=medication)
@@ -1423,14 +1433,14 @@ def medication_detail_resource(request, medication_id):
             "data": {
                 "medication": _serialize_medication(updated, request=request)
             },
-            "message": "Medication updated successfully."
+            "message": "Medicamento actualizado correctamente."
         })
 
     return Response(
         {
             "error": {
                 "code": "VALIDATION_ERROR",
-                "message": "Please correct the highlighted fields.",
+                "message": "Por favor corrija los campos resaltados en rojo en el formulario.",
                 "fields": form.errors,
             }
         },
@@ -1443,13 +1453,14 @@ def medication_detail_resource(request, medication_id):
 def medication_status_resource(request, medication_id):
     """
     Cambio de estado administrativo.
+    Administrador y Farmaceuta.
     """
-    if not _is_admin(request.user):
+    if not _puede_gestionar_medicamentos(request.user):
         return Response(
             {
                 "error": {
                     "code": "FORBIDDEN",
-                    "message": "You do not have permission.",
+                    "message": "No tiene permiso para acceder a este recurso.",
                 }
             },
             status=status.HTTP_403_FORBIDDEN,
@@ -1466,7 +1477,7 @@ def medication_status_resource(request, medication_id):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Status is required.",
+                    "message": "Estado es requerido.",
                     "fields": {"status_id": ["This field is required."]},
                 }
             },
@@ -1479,8 +1490,8 @@ def medication_status_resource(request, medication_id):
             {
                 "error": {
                     "code": "INVALID_STATUS",
-                    "message": "Invalid status.",
-                    "fields": {"status_id": ["Invalid status."]},
+                    "message": "Estado inválido.",
+                    "fields": {"status_id": ["Estado inválido."]},
                 }
             },
             status=status.HTTP_400_BAD_REQUEST,
@@ -1494,14 +1505,14 @@ def medication_status_resource(request, medication_id):
         medicamento=medication,
         accion="CAMBIO_ESTADO",
         usuario=request.user,
-        detalle=f"Status changed: {old_status} -> {new_status.nombre}",
+        detalle=f"Estado cambiado: {old_status} -> {new_status.nombre}",
     )
 
     return Response({
         "data": {
             "medication": _serialize_medication(medication, request=request)
         },
-        "message": "Medication status updated successfully."
+        "message": "Estado de medicamento actualizado correctamente."
     })
 
 
@@ -1513,7 +1524,7 @@ def pharmaceutical_forms_catalog(request):
         "data": {
             "results": [_serialize_catalog_item(item) for item in items]
         },
-        "message": "Pharmaceutical forms retrieved successfully."
+        "message": "Formas farmacéuticas recuperadas correctamente."
     })
 
 
@@ -1541,7 +1552,7 @@ def presentations_catalog(request):
         "data": {
             "results": results
         },
-        "message": "Presentations retrieved successfully."
+        "message": "Presentaciones recuperadas correctamente."
     })
 
 
@@ -1553,7 +1564,7 @@ def administration_routes_catalog(request):
         "data": {
             "results": [_serialize_catalog_item(item) for item in items]
         },
-        "message": "Administration routes retrieved successfully."
+        "message": "Rutas de administración recuperadas correctamente."
     })
 
 
@@ -1565,7 +1576,7 @@ def laboratories_catalog(request):
         "data": {
             "results": [_serialize_catalog_item(item) for item in items]
         },
-        "message": "Laboratories retrieved successfully."
+        "message": "Laboratorios recuperados correctamente."
     })
 
 
@@ -1577,7 +1588,7 @@ def medication_statuses_catalog(request):
         "data": {
             "results": [_serialize_catalog_item(item) for item in items]
         },
-        "message": "Medication statuses retrieved successfully."
+        "message": "Estados de medicamentos recuperados correctamente."
     })
 
 
@@ -1585,7 +1596,7 @@ def medication_statuses_catalog(request):
 @permission_classes([IsAuthenticated])
 def suppliers_catalog(request):
     """
-    GET: listado de proveedores para la SPA.
+    GET: listado de proveedores para la aplicación web.
          Soporta filtros por NIT, nombre y estado.
     POST: creación de proveedor por Administrador o Farmaceuta.
     """
@@ -1618,7 +1629,7 @@ def suppliers_catalog(request):
                     },
                     "count": len(results),
                 },
-                "message": "Suppliers retrieved successfully.",
+                "message": "Proveedores recuperados correctamente.",
             }
         )
 
@@ -1650,7 +1661,7 @@ def suppliers_catalog(request):
                 "data": {
                     "supplier": _serialize_supplier_row(proveedor),
                 },
-                "message": "Supplier created successfully.",
+                "message": "Proveedor creado correctamente.",
             },
             status=status.HTTP_201_CREATED,
         )
@@ -1659,7 +1670,7 @@ def suppliers_catalog(request):
         {
             "error": {
                 "code": "VALIDATION_ERROR",
-                "message": "Please correct the highlighted fields.",
+                "message": "Por favor corrija los campos resaltados en rojo en el formulario.",
                 "fields": form.errors,
             }
         },
@@ -1686,7 +1697,7 @@ def supplier_detail_resource(request, supplier_nit):
             {
                 "error": {
                     "code": "NOT_FOUND",
-                    "message": "Supplier not found.",
+                    "message": "Proveedor no encontrado.",
                     "fields": {},
                 }
             },
@@ -1699,7 +1710,7 @@ def supplier_detail_resource(request, supplier_nit):
                 "data": {
                     "supplier": _serialize_supplier_row(proveedor),
                 },
-                "message": "Supplier retrieved successfully.",
+                "message": "Proveedor recuperado correctamente.",
             }
         )
 
@@ -1728,7 +1739,7 @@ def supplier_status_resource(request, supplier_nit):
             {
                 "error": {
                     "code": "NOT_FOUND",
-                    "message": "Supplier not found.",
+                    "message": "Proveedor no encontrado.",
                     "fields": {},
                 }
             },
@@ -1764,9 +1775,9 @@ def catalog_medications_resource(request):
                 {
                     "error": {
                         "code": "INVALID_ID",
-                        "message": "Medication id must be numeric.",
+                        "message": "El ID de medicamento debe ser numérico.",
                         "fields": {
-                            "id": ["Medication id must be numeric."]
+                            "id": ["El ID de medicamento debe ser numérico."]
                         },
                     }
                 },
@@ -1783,7 +1794,7 @@ def catalog_medications_resource(request):
                         "results": [],
                         "suggestions": [],
                     },
-                    "message": "Medication not found."
+                    "message": "Medicamento no encontrado."
                 },
                 status=status.HTTP_200_OK,
             )
@@ -1795,7 +1806,7 @@ def catalog_medications_resource(request):
                     "results": [_serialize_catalog_medication(medication, request=request)],
                     "suggestions": [],
                 },
-                "message": "Medication retrieved successfully."
+                "message": "Medicamento recuperado correctamente."
             },
             status=status.HTTP_200_OK,
         )
@@ -1811,7 +1822,7 @@ def catalog_medications_resource(request):
                         "results": [_serialize_catalog_medication(exact_match, request=request)],
                         "suggestions": [],
                     },
-                    "message": "Medication retrieved successfully."
+                    "message": "Medicamento recuperado correctamente."
                 },
                 status=status.HTTP_200_OK,
             )
@@ -1829,7 +1840,7 @@ def catalog_medications_resource(request):
                     ],
                     "suggestions": suggestions,
                 },
-                "message": "Medication search completed."
+                "message": "Búsqueda de medicamentos completada."
             },
             status=status.HTTP_200_OK,
         )
@@ -1855,7 +1866,7 @@ def catalog_medications_resource(request):
                     "has_previous": page_obj.has_previous(),
                 },
             },
-            "message": "Catalog medications retrieved successfully."
+            "message": "Catálogo de medicamentos recuperados correctamente."
         },
         status=status.HTTP_200_OK,
     )
@@ -1884,7 +1895,7 @@ def catalog_medication_detail_resource(request, medication_id):
             "data": {
                 "medication": _serialize_catalog_medication(medication, request=request)
             },
-            "message": "Catalog medication retrieved successfully."
+            "message": "Catálogo de medicamento recuperado correctamente."
         },
         status=status.HTTP_200_OK,
     )
@@ -1894,7 +1905,7 @@ def catalog_medication_detail_resource(request, medication_id):
 @permission_classes([AllowAny])
 def public_medications_search_resource(request):
     """
-    Búsqueda pública/comercial de medicamentos.
+    Búsqueda de medicamentos para la aplicación web.
     """
     query = (request.GET.get("query") or "").strip()
     medication_id = (request.GET.get("id") or "").strip()
@@ -1928,7 +1939,7 @@ def public_medications_search_resource(request):
                         "suggestions": [],
                         "total_matches": 1,
                     },
-                    "message": "Medication search completed successfully."
+                    "message": "Búsqueda de medicamentos completada correctamente."
                 },
                 status=status.HTTP_200_OK,
             )
@@ -1941,7 +1952,7 @@ def public_medications_search_resource(request):
                     "suggestions": [],
                     "total_matches": 0,
                 },
-                "message": "No medications found for the provided id."
+                "message": "No se encontraron medicamentos para el ID proporcionado."
             },
             status=status.HTTP_200_OK,
         )
@@ -1955,7 +1966,7 @@ def public_medications_search_resource(request):
                     "suggestions": [],
                     "total_matches": 0,
                 },
-                "message": "Medication search completed successfully."
+                "message": "Búsqueda de medicamentos completada correctamente."
             },
             status=status.HTTP_200_OK,
         )
@@ -1993,7 +2004,7 @@ def public_medications_search_resource(request):
                 "suggestions": suggestions,
                 "total_matches": filtered_queryset.count(),
             },
-            "message": "Medication search completed successfully."
+            "message": "Búsqueda de medicamentos completada correctamente."
         },
         status=status.HTTP_200_OK,
     )
@@ -2003,7 +2014,7 @@ def public_medications_search_resource(request):
 @permission_classes([AllowAny])
 def public_medication_detail_resource(request, medication_id):
     """
-    Detalle público/comercial de medicamento.
+    Detalle de medicamento para la aplicación web.
     """
     medication = get_object_or_404(
         Medicamento.objects.select_related(
@@ -2050,7 +2061,7 @@ def public_medication_detail_resource(request, medication_id):
                     "can_be_sold": medication.puede_venderse,
                 }
             },
-            "message": "Medication retrieved successfully."
+            "message": "Medicamento recuperado correctamente."
         },
         status=status.HTTP_200_OK,
     )
@@ -2141,7 +2152,7 @@ def _supplier_update_response(request, proveedor):
                 "data": {
                     "supplier": _serialize_supplier_row(proveedor_actualizado),
                 },
-                "message": "Supplier updated successfully.",
+                "message": "Proveedor actualizado correctamente.",
             }
         )
 
@@ -2149,7 +2160,7 @@ def _supplier_update_response(request, proveedor):
         {
             "error": {
                 "code": "VALIDATION_ERROR",
-                "message": "Please correct the highlighted fields.",
+                "message": "Por favor corrija los campos resaltados en rojo en el formulario.",
                 "fields": form.errors,
             }
         },

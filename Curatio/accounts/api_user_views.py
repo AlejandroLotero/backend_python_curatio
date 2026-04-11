@@ -310,7 +310,7 @@ def users_resource(request):
             {
                 "error": {
                     "code": "FORBIDDEN",
-                    "message": "You do not have permission.",
+                    "message": "No tiene permiso para acceder a este recurso.",
                     "fields": {},
                 }
             },
@@ -374,7 +374,7 @@ def users_resource(request):
                     "document": document,
                 }
             },
-            "message": "Users retrieved successfully."
+            "message": "Usuarios recuperados correctamente."
         })
 
     # =========================
@@ -388,7 +388,7 @@ def users_resource(request):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Por favor validar los campos resaltados en rojo ",
+                    "message": "Por favor validar los campos resaltados en rojo en el formulario.",
                     "fields": _flatten_form_errors(form),
                 }
             },
@@ -436,7 +436,7 @@ def users_resource(request):
                     user, viewer_is_admin=True, request=request
                 )
             },
-            "message": "User created successfully."
+            "message": "Usuario creado correctamente."
         },
         status=status.HTTP_201_CREATED,
     )
@@ -464,7 +464,7 @@ def user_me_profile_resource(request):
                     "user": payload,
                     "meta": _profile_response_meta(request.user, u),
                 },
-                "message": "User retrieved successfully.",
+                "message": "Usuario recuperado correctamente.",
             },
             status=status.HTTP_200_OK,
         )
@@ -476,7 +476,7 @@ def user_me_profile_resource(request):
             {
                 "error": {
                     "code": "FORBIDDEN",
-                    "message": "You do not have permission to update this profile via this endpoint.",
+                    "message": "No tiene permiso para actualizar este perfil a través de este endpoint.",
                     "fields": {},
                 }
             },
@@ -500,7 +500,7 @@ def user_me_profile_resource(request):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Por favor corrija los campos indicados.",
+                    "message": "Por favor corrija los campos indicados en el formulario.",
                     "fields": _flatten_form_errors(form),
                 }
             },
@@ -543,7 +543,7 @@ def user_me_profile_resource(request):
                 "user": payload,
                 "meta": _profile_response_meta(request.user, user),
             },
-            "message": "Cuenta actualizada exitosamente",
+            "message": "Cuenta actualizada correctamente",
         },
         status=status.HTTP_200_OK,
     )
@@ -576,14 +576,14 @@ def user_detail_resource(request, user_id):
                     ),
                     "meta": _profile_response_meta(request.user, target_user),
                 },
-                "message": "User retrieved successfully."
+                "message": "Usuario recuperado correctamente."
             })
 
         return Response(
             {
                 "error": {
                     "code": "FORBIDDEN",
-                    "message": "You do not have permission.",
+                    "message": "No tiene permiso para acceder a este recurso.",
                     "fields": {},
                 }
             },
@@ -596,7 +596,7 @@ def user_detail_resource(request, user_id):
             {
                 "error": {
                     "code": "FORBIDDEN",
-                    "message": "You do not have permission.",
+                    "message": "No tiene permiso para acceder a este recurso.",
                     "fields": {},
                 }
             },
@@ -612,7 +612,7 @@ def user_detail_resource(request, user_id):
             {
                 "error": {
                     "code": "INVALID_OPERATION",
-                    "message": "No se puede desactivar una cuenta de administrador.",
+                    "message": "No se puede desactivar una cuenta de Administrador.",
                     "fields": {},
                 }
             },
@@ -628,7 +628,7 @@ def user_detail_resource(request, user_id):
                     "error": {
                         "code": "VALIDATION_ERROR",
                         "message": (
-                            "Para cambiar el estado a Inactivo se requiere una justificación "
+                            "Para cambiar el estado a Inactivo se requiere una justificación visible al pasar a Inactivo "
                             "(campos: reason, inactivation_reason, justification o motivo)."
                         ),
                         "fields": {
@@ -657,7 +657,7 @@ def user_detail_resource(request, user_id):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "Por favor corrija los campos indicados.",
+                    "message": "Por favor corrija los campos indicados en el formulario.",
                     "fields": _flatten_form_errors(form),
                 }
             },
@@ -705,7 +705,7 @@ def user_detail_resource(request, user_id):
                     user, viewer_is_admin=True, request=request
                 )
             },
-            "message": "Cuenta actualizada exitosamente",
+            "message": "Cuenta actualizada correctamente",
         },
         status=status.HTTP_200_OK,
     )
@@ -723,7 +723,7 @@ def user_status_resource(request, user_id):
             {
                 "error": {
                     "code": "FORBIDDEN",
-                    "message": "You do not have permission.",
+                    "message": "No tiene permiso para acceder a este recurso.",
                     "fields": {},
                 }
             },
@@ -738,7 +738,7 @@ def user_status_resource(request, user_id):
             {
                 "error": {
                     "code": "INVALID_OPERATION",
-                    "message": "Administrator accounts cannot be disabled.",
+                    "message": "No se puede desactivar una cuenta de Administrador.",
                     "fields": {},
                 }
             },
@@ -753,7 +753,7 @@ def user_status_resource(request, user_id):
             {
                 "error": {
                     "code": "VALIDATION_ERROR",
-                    "message": "is_active is required.",
+                    "message": "is_active es requerido.",
                     "fields": {
                         "is_active": ["This field is required."]
                     },
@@ -781,5 +781,5 @@ def user_status_resource(request, user_id):
                 target_user, viewer_is_admin=True, request=request
             )
         },
-        "message": "User status updated successfully."
+        "message": "Estado de usuario actualizado correctamente."
     })
