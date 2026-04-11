@@ -1,0 +1,16 @@
+Hola, {{ sale.cliente.nombre }}
+
+Tu compra con factura {{ sale.numero_factura }} fue aprobada correctamente.
+
+Estado actual: {{ sale.get_estado_display }}
+
+{% if sale.metodo_entrega == "delivery" %}
+Tu pedido será enviado a la dirección registrada.
+{% else %}
+Tu pedido estará disponible para recoger en tienda después de 45 minutos.
+{% endif %}
+
+Gracias por confiar en {{ brand_name }}.
+
+Este es un correo automático. Por favor no responder.
+{% if support_email %}Soporte: {{ support_email }}{% endif %}

@@ -1,0 +1,23 @@
+Hola, {{ sale.cliente.nombre }}
+
+Se registró una compra en Curatio con la factura {{ sale.numero_factura }}.
+
+Fecha: {{ sale.fecha_hora|date:"Y-m-d H:i" }}
+Estado: {{ sale.get_estado_display }}
+Tipo de pago: {{ sale.get_tipo_pago_display }}
+
+Detalle de medicamentos:
+{% for line in lines %}
+- {{ line.medicamento.nombre }}: {{ line.cantidad }} x {{ line.precio_unitario }} = {{ line.subtotal_linea }}
+{% endfor %}
+
+Resumen:
+Subtotal: {{ sale.subtotal }}
+IVA: {{ sale.iva }}
+Descuento: {{ sale.descuento }}
+Total: {{ sale.total }}
+
+Gracias por confiar en {{ brand_name }}.
+
+Este es un correo automático. Por favor no responder.
+{% if support_email %}Soporte: {{ support_email }}{% endif %}

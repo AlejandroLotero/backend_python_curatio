@@ -1,15 +1,15 @@
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import traceback
-
+from django.template.loader import render_to_string
 from django.conf import settings
-from django.core.mail import send_mail
+
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-
+from accounts.email_utils import send_branded_email
 from openpyxl import Workbook
 from reportlab.graphics.barcode import qr
 from reportlab.graphics.shapes import Drawing
@@ -2352,12 +2352,26 @@ def customer_checkout_resource(request):
             )
 
         try:
-            send_mail(
+            send_branded_email(
                 subject=f"Curatio — Compra registrada {sale.numero_factura}",
-                message=construir_cuerpo_correo_venta(sale),
-                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-                recipient_list=[sale.cliente.email],
-                fail_silently=False,
+                to=[sale.cliente.email],
+                template_name="emails/sale_created.html",
+                context={
+                    "sale": sale,
+                    "lines": sale.lineas.select_related("medicamento").all(),
+                },
+                text_body=render_to_string(
+                    "emails/sale_created.txt",
+                    {
+                        **{
+                            "brand_name": getattr(settings, "EMAIL_BRAND_NAME", "Curatio"),
+                            "brand_logo_url": getattr(settings, "EMAIL_BRAND_LOGO_URL", ""),
+                            "support_email": getattr(settings, "BRAND_SUPPORT_EMAIL", settings.DEFAULT_FROM_EMAIL),
+                        },
+                        "sale": sale,
+                        "lines": sale.lineas.select_related("medicamento").all(),
+                    },
+                ),
             )
         except Exception as exc:
             VentaHistorial.objects.create(
@@ -2707,13 +2721,6 @@ def sale_internal_approval_resource(request, sale_id):
             )
 
         try:
-            # send_mail(
-            #     subject=f"Curatio — Compra aprobada {sale.numero_factura}",
-            #     message=_construir_mensaje_cliente_aprobacion(sale),
-            #     from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-            #     recipient_list=[sale.cliente.email],
-            #     fail_silently=False,
-            # )
             send_branded_email(
                 subject=f"Curatio — Compra aprobada {sale.numero_factura}",
                 to=[sale.cliente.email],
@@ -2722,7 +2729,18 @@ def sale_internal_approval_resource(request, sale_id):
                     "sale": sale,
                     "lines": sale.lineas.select_related("medicamento").all(),
                 },
-                text_body=_construir_mensaje_cliente_aprobacion(sale),
+                text_body=render_to_string(
+                    "emails/sale_approved.txt",
+                    {
+                        **{
+                            "brand_name": getattr(settings, "EMAIL_BRAND_NAME", "Curatio"),
+                            "brand_logo_url": getattr(settings, "EMAIL_BRAND_LOGO_URL", ""),
+                            "support_email": getattr(settings, "BRAND_SUPPORT_EMAIL", settings.DEFAULT_FROM_EMAIL),
+                        },
+                        "sale": sale,
+                        "lines": sale.lineas.select_related("medicamento").all(),
+                    },
+                ),
             )
         except Exception as exc:
             VentaHistorial.objects.create(
@@ -2736,8 +2754,8 @@ def sale_internal_approval_resource(request, sale_id):
                 venta=sale,
                 accion="NOTIFICACION_CORREO",
                 usuario=request.user,
-                detalle="Correo de aprobación y entrega enviado al cliente.",
-            )
+                detalle="Correo de aprobación enviado al cliente.",
+    )
 
         sale = Venta.objects.select_related(
             "cliente",

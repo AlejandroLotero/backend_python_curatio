@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Detalle de venta</title>
+</head>
+<body style="margin:0; padding:0; background:{{ background_color }}; font-family:Arial, Helvetica, sans-serif; color:{{ text_color }};">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:{{ background_color }}; padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px; background:{{ card_color }}; border:1px solid {{ border_color }}; border-radius:18px; overflow:hidden;">
+          <tr>
+            <td style="background:linear-gradient(135deg, {{ primary_color }}, #123E63); padding:28px 32px;">
+              {% if brand_logo_url %}
+                <img src="{{ brand_logo_url }}" alt="{{ brand_name }}" style="max-height:52px; display:block; margin-bottom:10px;">
+              {% endif %}
+              <div style="font-size:28px; font-weight:700; color:#ffffff; margin-bottom:4px;">
+                {{ brand_name }}
+              </div>
+              <div style="font-size:14px; color:#D7E8F7;">
+                Detalle de venta registrada
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px;">
+              <h1 style="margin:0 0 14px; font-size:24px; color:{{ text_color }};">
+                Hola, {{ sale.cliente.nombre }}
+              </h1>
+
+              <p style="margin:0 0 18px; font-size:15px; line-height:1.7;">
+                Se registró una venta en <strong>{{ brand_name }}</strong> con la factura
+                <strong>{{ sale.numero_factura }}</strong>.
+              </p>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0; background:#F9FAFB; border:1px solid {{ border_color }}; border-radius:14px;">
+                <tr>
+                  <td style="padding:22px;">
+                    <div style="font-size:13px; color:{{ muted_color }}; margin-bottom:6px;">Fecha y hora</div>
+                    <div style="font-size:16px; color:{{ text_color }}; font-weight:600; margin-bottom:16px;">
+                      {{ sale.fecha_hora|date:"Y-m-d H:i" }}
+                    </div>
+
+                    <div style="font-size:13px; color:{{ muted_color }}; margin-bottom:6px;">Estado</div>
+                    <div style="font-size:16px; color:{{ primary_color }}; font-weight:700; margin-bottom:16px;">
+                      {{ sale.get_estado_display }}
+                    </div>
+
+                    <div style="font-size:13px; color:{{ muted_color }}; margin-bottom:6px;">Tipo de pago</div>
+                    <div style="font-size:16px; color:{{ text_color }}; font-weight:600;">
+                      {{ sale.get_tipo_pago_display }}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <h2 style="margin:0 0 12px; font-size:18px; color:{{ text_color }};">Detalle de medicamentos</h2>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse; margin-bottom:20px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="padding:10px; background:{{ primary_color }}; color:#fff; font-size:13px;">Medicamento</th>
+                    <th align="center" style="padding:10px; background:{{ primary_color }}; color:#fff; font-size:13px;">Cantidad</th>
+                    <th align="right" style="padding:10px; background:{{ primary_color }}; color:#fff; font-size:13px;">Valor unitario</th>
+                    <th align="right" style="padding:10px; background:{{ primary_color }}; color:#fff; font-size:13px;">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for line in lines %}
+                  <tr>
+                    <td style="padding:10px; border:1px solid {{ border_color }};">{{ line.medicamento.nombre }}</td>
+                    <td align="center" style="padding:10px; border:1px solid {{ border_color }};">{{ line.cantidad }}</td>
+                    <td align="right" style="padding:10px; border:1px solid {{ border_color }};">{{ line.precio_unitario }}</td>
+                    <td align="right" style="padding:10px; border:1px solid {{ border_color }};">{{ line.subtotal_linea }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+
+              <div style="margin-top:18px; padding:18px; background:#F9FAFB; border:1px solid {{ border_color }}; border-radius:12px;">
+                <div style="font-size:14px; line-height:1.8;">
+                  <strong>Subtotal:</strong> {{ sale.subtotal }}<br>
+                  <strong>IVA:</strong> {{ sale.iva }}<br>
+                  <strong>Descuento:</strong> {{ sale.descuento }}<br>
+                  <strong>Total:</strong> {{ sale.total }}
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:22px 32px; background:#F9FAFB; border-top:1px solid {{ border_color }};">
+              <p style="margin:0; font-size:12px; color:{{ muted_color }}; line-height:1.7;">
+                Este es un correo automático de {{ brand_name }}. Por favor, no respondas a este mensaje.
+                {% if support_email %}<br>Contacto de referencia: {{ support_email }}{% endif %}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
