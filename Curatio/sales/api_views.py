@@ -1703,12 +1703,22 @@ def sales_resource(request):
             )
 
         try:
-            send_mail(
+            # send_mail(
+            #     subject=f"Curatio — Detalle de venta {sale.numero_factura}",
+            #     message=construir_cuerpo_correo_venta(sale),
+            #     from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            #     recipient_list=[sale.cliente.email],
+            #     fail_silently=False,
+            # )
+            send_branded_email(
                 subject=f"Curatio — Detalle de venta {sale.numero_factura}",
-                message=construir_cuerpo_correo_venta(sale),
-                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-                recipient_list=[sale.cliente.email],
-                fail_silently=False,
+                to=[sale.cliente.email],
+                template_name="emails/sale_created.html",
+                context={
+                    "sale": sale,
+                    "lines": sale.lineas.select_related("medicamento").all(),
+                },
+                text_body=construir_cuerpo_correo_venta(sale),
             )
         except Exception as exc:
             VentaHistorial.objects.create(
@@ -2697,12 +2707,22 @@ def sale_internal_approval_resource(request, sale_id):
             )
 
         try:
-            send_mail(
+            # send_mail(
+            #     subject=f"Curatio — Compra aprobada {sale.numero_factura}",
+            #     message=_construir_mensaje_cliente_aprobacion(sale),
+            #     from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            #     recipient_list=[sale.cliente.email],
+            #     fail_silently=False,
+            # )
+            send_branded_email(
                 subject=f"Curatio — Compra aprobada {sale.numero_factura}",
-                message=_construir_mensaje_cliente_aprobacion(sale),
-                from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-                recipient_list=[sale.cliente.email],
-                fail_silently=False,
+                to=[sale.cliente.email],
+                template_name="emails/sale_approved.html",
+                context={
+                    "sale": sale,
+                    "lines": sale.lineas.select_related("medicamento").all(),
+                },
+                text_body=_construir_mensaje_cliente_aprobacion(sale),
             )
         except Exception as exc:
             VentaHistorial.objects.create(
