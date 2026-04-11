@@ -891,21 +891,13 @@ from .forms import (
 )
 
 
-def _is_admin(user):
+def _usuario_es_admin_o_farmaceuta(user):
     """
-    Valida si el usuario autenticado es Administrador.
-    """
-    return getattr(user, "rol", None) == "Administrador"
+    True si en BD el usuario tiene rol Administrador o Farmaceuta.
 
-
-def _puede_gestionar_proveedores(user):
-    """
-    Permite gestión de proveedores a:
-    - Administrador
-    - Farmaceuta
-
-    Se consulta el rol real en BD para evitar inconsistencias
-    entre sesión y datos actuales del usuario.
+    Política única para la API de productos consumida por la SPA (frontend aparte):
+    inventario de medicamentos y proveedores comparten el mismo criterio.
+    Se lee el rol desde la BD para no depender de datos desactualizados en sesión.
     """
     if not getattr(user, "is_authenticated", False):
         return False
@@ -925,6 +917,21 @@ def _puede_gestionar_proveedores(user):
         return False
 
     return str(rol).strip().casefold() in ("administrador", "farmaceuta")
+
+
+def _puede_gestionar_proveedores(user):
+    """
+    Permite gestión de proveedores a Administrador o Farmaceuta.
+    """
+    return _usuario_es_admin_o_farmaceuta(user)
+
+
+def _puede_gestionar_medicamentos(user):
+    """
+    Permite gestión del inventario de medicamentos (rutas v1/inventory/medications)
+    a Administrador o Farmaceuta, en línea con v1/procurement/suppliers.
+    """
+    return _usuario_es_admin_o_farmaceuta(user)
 
 
 def _forbidden_suppliers_response():
@@ -1254,8 +1261,10 @@ def _supplier_estado_change_response(request, proveedor):
 def medications_resource(request):
     """
     Recurso administrativo de medicamentos.
+    Administrador y Farmaceuta (misma política que proveedores en esta API).
     """
-    if not _is_admin(request.user):
+    # Farmaceuta: acceso SPA al inventario; no se usan templates Django del módulo products.
+    if not _puede_gestionar_medicamentos(request.user):
         return Response(
             {
                 "error": {
@@ -1371,8 +1380,9 @@ def medications_resource(request):
 def medication_detail_resource(request, medication_id):
     """
     Detalle administrativo de medicamento.
+    Administrador y Farmaceuta.
     """
-    if not _is_admin(request.user):
+    if not _puede_gestionar_medicamentos(request.user):
         return Response(
             {
                 "error": {
@@ -1443,8 +1453,9 @@ def medication_detail_resource(request, medication_id):
 def medication_status_resource(request, medication_id):
     """
     Cambio de estado administrativo.
+    Administrador y Farmaceuta.
     """
-    if not _is_admin(request.user):
+    if not _puede_gestionar_medicamentos(request.user):
         return Response(
             {
                 "error": {
