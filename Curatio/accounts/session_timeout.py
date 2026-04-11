@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib.auth import logout
+from django.db import DatabaseError
 from django.utils import timezone
 from .session_exclusivity_service import SessionExclusivityService
 
@@ -21,10 +22,13 @@ class SessionInactivityMiddleware:
                 if elapsed > timeout:
                     current_session_key = request.session.session_key
 
-                    SessionExclusivityService.release_if_owner(
-                        user=request.user,
-                        session_key=current_session_key,
-                    )
+                    try:
+                        SessionExclusivityService.release_if_owner(
+                            user=request.user,
+                            session_key=current_session_key,
+                        )
+                    except DatabaseError:
+                        pass
 
                     logout(request)
                     request.session.flush()

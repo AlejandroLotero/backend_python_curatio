@@ -91,3 +91,46 @@ class EditarUsuarioAdminForm(forms.ModelForm):
         if commit:
             user.save()
         return user
+
+
+class EditarUsuarioSelfServiceForm(forms.ModelForm):
+    """
+    Edición de perfil por el propio usuario (Cliente / Farmaceuta).
+    No permite cambiar rol ni estado de cuenta.
+    """
+
+    class Meta:
+        model = User
+        fields = [
+            "nombre",
+            "tipo_documento",
+            "numero_documento",
+            "email",
+            "telefono",
+            "telefono_secundario",
+            "direccion",
+            "fecha_inicio",
+            "fecha_fin",
+        ]
+
+    def clean_email(self):
+        email = self.cleaned_data.get("email")
+        if not email:
+            return email
+        qs = User.objects.filter(email__iexact=email.strip())
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("Ya existe un usuario con este correo electrónico.")
+        return email
+
+    def clean_numero_documento(self):
+        numero = (self.cleaned_data.get("numero_documento") or "").strip()
+        if not numero:
+            raise forms.ValidationError("Este campo es obligatorio.")
+        qs = User.objects.filter(numero_documento=numero)
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError("El número de documento ya está en uso.")
+        return numero
