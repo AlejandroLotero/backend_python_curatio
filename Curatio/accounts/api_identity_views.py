@@ -598,7 +598,15 @@
 #     )
 
 from django.conf import settings
-from django.contrib.auth import authenticate, login, logout, get_user_model
+#Tras guardar la nueva contraseña se llama a update_session_auth_hash(request, user), que alinea la sesión actual con el nuevo hash, 
+#para que puedas seguir navegando (perfil, etc.) sin tener que iniciar sesión otra vez.
+from django.contrib.auth import (
+    authenticate,
+    get_user_model,
+    login,
+    logout,
+    update_session_auth_hash,
+)
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -1110,7 +1118,7 @@ def password_recovery_confirm_view(request):
     return Response(
         {
             "data": None,
-            "message": "Password updated successfully.",
+            "message": "Contraseña actualizada exitosamente.",
         },
         status=status.HTTP_200_OK,
     )
@@ -1270,11 +1278,12 @@ def password_change_session_view(request):
 
     user.set_password(password)
     user.save(update_fields=["password"])
+    update_session_auth_hash(request, user) # Alinea la sesión actual con el nuevo hash, para que puedas seguir navegando (perfil, etc.) sin tener que iniciar sesión otra vez.
 
     return Response(
         {
             "data": None,
-            "message": "Password updated successfully."
+            "message": "Contraseña actualizada exitosamente."
         },
         status=status.HTTP_200_OK,
     )

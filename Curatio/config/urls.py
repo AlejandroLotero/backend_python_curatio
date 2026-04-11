@@ -50,6 +50,8 @@ urlpatterns = [
         "v1/identity/session/password/",
         password_change_session_view,
         name="identity_session_password_change",
+    ),
+    path(
         "v1/identity/session/takeover/",
         session_takeover_view,
         name="identity_session_takeover",
