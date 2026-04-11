@@ -191,6 +191,33 @@ def session_resource_view(request):
         login(request, user)
 
         # Reinicia marca de actividad
+        login(request, user)
+        request.session.save()
+
+        client_instance_id = request.data.get("client_instance_id")
+
+        result = SessionExclusivityService.acquire_or_detect_conflict(
+            user=user,
+            session_key=request.session.session_key,
+            client_instance_id=client_instance_id,
+        )
+
+        if not result["success"]:
+            return Response(
+                {
+                    "error": {
+                        "code": "SESSION_CONFLICT",
+                        "message": "Another active session exists.",
+                        "fields": {},
+                        "meta": {
+                            "requires_takeover": True
+                        }
+                    }
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # OK → sesión válida
         import time
         request.session["last_activity_ts"] = int(time.time())
 
