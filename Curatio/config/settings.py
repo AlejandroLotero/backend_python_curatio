@@ -75,6 +75,7 @@ PASSWORD_RESET_TIMEOUT = env("PASSWORD_RESET_TIMEOUT")
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+STATIC_URL = "static/"
 # =========================
 # AUTH
 # =========================
@@ -180,7 +181,13 @@ USE_TZ = True
 # =========================
 # STATIC
 # =========================
-STATIC_URL = "static/"
+# =========================
+# STATIC
+# =========================
+STATIC_URL = "/static/"
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
 
 # =========================
 # LOGIN REDIRECTS
@@ -244,24 +251,12 @@ REST_FRAMEWORK = {
 # =========================
 # BRANDING EMAIL
 # =========================
-BRAND_NAME = env("BRAND_NAME", default="Curatio")
-BRAND_SUPPORT_EMAIL = env("BRAND_SUPPORT_EMAIL", default=EMAIL_HOST_USER or "soporte@curatio.local")
-
-# Debe ser URL ABSOLUTA pública, no ruta local.
-BRAND_LOGO_URL = env(
-    "BRAND_LOGO_URL",
-    default=f"{FRONTEND_BASE_URL}/branding/email/logo-curatio-email.png",
+EMAIL_BRAND_NAME = env("EMAIL_BRAND_NAME", default="Curatio")
+EMAIL_BRAND_LOGO_URL = env(
+    "EMAIL_BRAND_LOGO_URL",
+    default="",
 )
-
-EMAIL_BRAND = {
-    "brand_name": BRAND_NAME,
-    "brand_logo_url": BRAND_LOGO_URL,
-    "support_email": BRAND_SUPPORT_EMAIL,
-    "primary_color": "#0F4C81",
-    "accent_color": "#16A085",
-    "background_color": "#F4F7FB",
-    "card_color": "#FFFFFF",
-    "border_color": "#D9E2EC",
-    "text_color": "#1F2937",
-    "muted_color": "#6B7280",
-}
+BRAND_SUPPORT_EMAIL = env(
+    "BRAND_SUPPORT_EMAIL",
+    default=DEFAULT_FROM_EMAIL,
+)
