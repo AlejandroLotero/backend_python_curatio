@@ -607,7 +607,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -834,6 +834,35 @@ def session_resource_view(request):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        # Reinicia marca de actividad
+        login(request, user)
+        request.session.save()
+
+        client_instance_id = request.data.get("client_instance_id")
+
+        result = SessionExclusivityService.acquire_or_detect_conflict(
+            user=user,
+            session_key=request.session.session_key,
+            client_instance_id=client_instance_id,
+        )
+
+        if not result["success"]:
+            return Response(
+                {
+                    "error": {
+                        "code": "SESSION_CONFLICT",
+                        "message": "Another active session exists.",
+                        "fields": {},
+                        "meta": {
+                            "requires_takeover": True
+                        }
+                    }
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        # OK → sesión válida
+        import time
         request.session["last_activity_ts"] = int(time.time())
 
         return Response(
@@ -1175,6 +1204,77 @@ def session_takeover_view(request):
                 "user": _serialize_session_user(request, user),
             },
             "message": "Session takeover completed successfully.",
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def password_change_session_view(request):
+    """
+    Cambio de contraseña para el usuario autenticado (sesión activa).
+    No requiere token de correo; valida política con validate_password.
+    """
+    password = request.data.get("password") or ""
+    confirm_password = request.data.get("confirm_password") or ""
+
+    field_errors = {}
+    if not password:
+        field_errors["password"] = ["This field is required."]
+    if not confirm_password:
+        field_errors["confirm_password"] = ["This field is required."]
+
+    if field_errors:
+        return Response(
+            {
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "No estás cumpliendo con las reglas de negocio",
+                    "fields": field_errors,
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if password != confirm_password:
+        return Response(
+            {
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Passwords do not match.",
+                    "fields": {
+                        "confirm_password": ["Passwords do not match."]
+                    },
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user = request.user
+    try:
+        validate_password(password, user=user)
+    except DjangoValidationError as exc:
+        return Response(
+            {
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Password does not meet security policy.",
+                    "fields": {
+                        "password": list(exc.messages)
+                    },
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    user.set_password(password)
+    user.save(update_fields=["password"])
+
+    return Response(
+        {
+            "data": None,
+            "message": "Password updated successfully."
         },
         status=status.HTTP_200_OK,
     )

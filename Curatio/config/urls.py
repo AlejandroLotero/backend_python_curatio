@@ -16,6 +16,7 @@ from accounts.api_identity_views import (
     password_recovery_request_view,
     password_recovery_validate_view,
     password_recovery_confirm_view,
+    password_change_session_view,
     session_takeover_view,
 )
 
@@ -46,6 +47,9 @@ urlpatterns = [
         name="password_recovery_confirm",
     ),
     path(
+        "v1/identity/session/password/",
+        password_change_session_view,
+        name="identity_session_password_change",
         "v1/identity/session/takeover/",
         session_takeover_view,
         name="identity_session_takeover",
@@ -54,6 +58,7 @@ urlpatterns = [
     # ============================
     # USERS
     # =========================
+    path("v1/people/users/me/", user_me_profile_resource, name="user_me_profile"),
     path("v1/people/users/", users_resource, name="users_resource"),
     path("v1/people/users/<int:user_id>/", user_detail_resource, name="user_detail_resource"),
     path("v1/people/users/<int:user_id>/status/", user_status_resource, name="user_status_resource"),
