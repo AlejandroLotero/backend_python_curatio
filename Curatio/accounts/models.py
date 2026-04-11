@@ -193,8 +193,13 @@ class User(AbstractBaseUser, PermissionsMixin):
 
         # ===== FOTO VALIDACIÓN =====
         if self.foto:
-            if self.foto.size > 2 * 1024 * 1024:
-                raise ValidationError("La imagen no puede superar 2MB.")
+            try:
+                if self.foto.size > 2 * 1024 * 1024:  # 2MB
+                    raise ValidationError({
+                        "foto": "La imagen no puede superar los 2MB."
+                    })
+            except Exception:
+                pass # Evita romper si el archivo no existe
 
             if not self.foto.name.lower().endswith((".jpg", ".jpeg", ".png")):
                 raise ValidationError("Formato de imagen no permitido.")

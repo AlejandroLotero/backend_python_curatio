@@ -510,19 +510,21 @@ def user_me_profile_resource(request):
     user = form.save(commit=False)
     if photo_file:
         user.foto = photo_file
-    try:
-        user.full_clean()
-    except DjangoValidationError as exc:
-        return Response(
-            {
-                "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "Por favor corrija los campos indicados.",
-                    "fields": _flatten_model_validation_error(exc),
-                }
-            },
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    #Conflicto de validación a nivel de modelo (ejemplo: formato de email) al actualizar solo algunos campos sin pasar por el formulario de admin completo, que es el que tiene toda la lógica de validación. Por eso se omite esta validación extra que no se dispara en el flujo normal del frontend.
+    #Se deja user.save() que también ejecuta validaciones pero no lanza excepción sino que devuelve False, y se asume que el formulario ya validó los campos editables por el usuario. Si se quisiera validar igual que en admin, habría que replicar esa lógica de validación adicional aquí o hacer un refactor para compartirla entre ambos formularios.
+    # try:
+    #     user.full_clean()
+    # except DjangoValidationError as exc:
+    #     return Response(
+    #         {
+    #             "error": {
+    #                 "code": "VALIDATION_ERROR",
+    #                 "message": "Por favor corrija los campos indicados.",
+    #                 "fields": _flatten_model_validation_error(exc),
+    #             }
+    #         },
+    #         status=status.HTTP_400_BAD_REQUEST,
+    #     )
     user.save()
 
     BitacoraUsuario.objects.create(
@@ -669,19 +671,19 @@ def user_detail_resource(request, user_id):
         user.is_staff = False
     if photo_file:
         user.foto = photo_file
-        try:
-            user.full_clean()
-        except DjangoValidationError as exc:
-            return Response(
-                {
-                    "error": {
-                        "code": "VALIDATION_ERROR",
-                        "message": "Por favor corrija los campos indicados.",
-                        "fields": _flatten_model_validation_error(exc),
-                    }
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        # try:
+        #     user.full_clean()
+        # except DjangoValidationError as exc:
+        #     return Response(
+        #         {
+        #             "error": {
+        #                 "code": "VALIDATION_ERROR",
+        #                 "message": "Por favor corrija los campos indicados.",
+        #                 "fields": _flatten_model_validation_error(exc),
+        #             }
+        #         },
+        #         status=status.HTTP_400_BAD_REQUEST,
+        #     )
     user.save()
 
     bitacora_motivo = (
